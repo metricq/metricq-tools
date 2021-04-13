@@ -1,0 +1,7 @@
+recursive-include metricq_tools *.py
+include metricq_tools/version.py
+
+include pyproject.toml
+include *.md
+
+exclude .pre-commit-config.yaml
