@@ -22,6 +22,9 @@ class CommandLineChoice:
             camelcase_to_kebabcase(name) for name in getattr(cls, "__members__").keys()
         ]
 
+    def as_choice(self) -> str:
+        return camelcase_to_kebabcase(getattr(self, "name"))
+
     @classmethod
     def from_choice(cls: Type[_C], option: str) -> _C:
         member_name = kebabcase_to_camelcase(option)

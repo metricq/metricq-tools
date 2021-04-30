@@ -29,15 +29,18 @@
 
 import asyncio
 from contextlib import suppress
-from typing import Optional
+from enum import Enum, auto
+from typing import Any, Dict, Optional, TypedDict
 
 import aio_pika
 import click
 import click_completion
 import click_log
 import metricq
+from metricq.types import Metric
 
 from .logging import get_root_logger
+from .utils import CommandLineChoice
 
 logger = get_root_logger()
 
@@ -46,21 +49,33 @@ click_completion.init()
 Database = str
 
 
+class OutputFormat(CommandLineChoice, Enum):
+    Pretty = auto()
+    Json = auto()
+
+
+class SpyResults(TypedDict):
+    location: Database
+    metadata: Dict[str, Any]
+
+
 class MetricQSpy(metricq.HistoryClient):
     def __init__(self, server):
         super().__init__("spy", server, add_uuid=True)
         self._data_locations: Optional[asyncio.Queue[Database]] = None
 
-    async def spy(self, patterns):
+    async def spy(self, patterns, *, output_format: OutputFormat):
         self._data_locations = asyncio.Queue()
         await self.connect()
 
+        results: Dict[Metric, SpyResults] = dict()
+
         for pattern in patterns:
-            result = await self.get_metrics(
+            result: Dict[Metric, Dict[str, Any]] = await self.get_metrics(
                 selector=pattern,
                 metadata=True,
                 historic=None,
-            )
+            )  # type: ignore # This is a bug in the type annotations for get_metrics
 
             assert isinstance(result, dict), "No metadata in result of get_metrics"
 
@@ -77,18 +92,28 @@ class MetricQSpy(metricq.HistoryClient):
                             timeout=5,
                         )
                         database = await self._data_locations.get()
-                        click.echo(
-                            "{metric} (stored on {database}): {metadata}".format(
-                                metric=click.style(metric, fg="cyan"),
-                                database=click.style(database, fg="red"),
-                                metadata={
-                                    k: v
-                                    for k, v in metadata.items()
-                                    if not k.startswith("_")
-                                },
-                            )
-                        )
+                        metadata = {
+                            k: v for k, v in metadata.items() if not k.startswith("_")
+                        }
 
+                        if output_format is OutputFormat.Pretty:
+                            click.echo(
+                                "{metric} (stored on {database}): {metadata}".format(
+                                    metric=click.style(metric, fg="cyan"),
+                                    database=click.style(database, fg="red"),
+                                    metadata=metadata,
+                                )
+                            )
+                        elif output_format is OutputFormat.Json:
+                            results[metric] = {
+                                "location": database,
+                                "metadata": metadata,
+                            }
+
+        if output_format is OutputFormat.Json:
+            import json
+
+            click.echo(json.dumps(results, sort_keys=True, indent=None))
         await self.stop()
 
     async def _on_history_response(self, message: aio_pika.IncomingMessage):
@@ -101,11 +126,16 @@ class MetricQSpy(metricq.HistoryClient):
 @click.command()
 @click_log.simple_verbosity_option(logger, default="warning")
 @click.option("--server", default="amqp://localhost/")
+@click.option(
+    "--format",
+    type=click.Choice(OutputFormat.as_choice_list(), case_sensitive=False),
+    default=OutputFormat.Pretty.as_choice(),
+)
 @click.argument("metrics", required=True, nargs=-1)
-def main(server, metrics):
+def main(server, format, metrics):
     spy = MetricQSpy(server)
 
-    asyncio.run(spy.spy(metrics))
+    asyncio.run(spy.spy(metrics, output_format=OutputFormat.from_choice(format)))
 
 
 if __name__ == "__main__":
