@@ -29,10 +29,9 @@
 
 import asyncio
 import datetime
-import re
 from enum import Enum
 from enum import auto as enum_auto
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 import aio_pika
 import click
@@ -45,29 +44,15 @@ from dateutil.tz import tzlocal
 from metricq.types import Timedelta
 
 from .logging import get_root_logger
+from .utils import CommandLineChoice
 
 logger = get_root_logger()
 
 click_completion.init()
 
 
-def camelcase_to_kebabcase(camelcase: str) -> str:
-    # Match empty string preceeding uppercase character, but not at the start
-    # of the word. Replace with '-' and make lowercase to get kebab-case word.
-    return re.sub(r"(?<!^)(?=[A-Z])", "-", camelcase).lower()
-
-
-class IgnoredEvent(Enum):
+class IgnoredEvent(CommandLineChoice, Enum):
     ErrorResponses = enum_auto()
-
-    @classmethod
-    def as_option_names(cls) -> List[str]:
-        return [camelcase_to_kebabcase(name) for name in cls.__members__.keys()]
-
-    @classmethod
-    def from_option_name(cls, option: str) -> "IgnoredEvent":
-        member_name = "".join(part.title() for part in option.split("-"))
-        return cls.__members__[member_name]
 
 
 class DiscoverErrorResponse(ValueError):
@@ -249,14 +234,14 @@ class MetricQDiscover(metricq.Agent):
 @click.option("-t", "--timeout", default="30s")
 @click.option(
     "--ignore",
-    type=click.Choice(IgnoredEvent.as_option_names(), case_sensitive=False),
+    type=click.Choice(IgnoredEvent.as_choice_list(), case_sensitive=False),
     multiple=True,
 )
 def main(server, timeout: str, ignore):
     d = MetricQDiscover(
         server,
         timeout=Timedelta.from_string(timeout),
-        ignore_events=set(IgnoredEvent.from_option_name(event) for event in ignore),
+        ignore_events=set(IgnoredEvent.from_choice(event) for event in ignore),
     )
 
     asyncio.run(d.discover())
