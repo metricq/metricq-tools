@@ -28,6 +28,8 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import asyncio
+from contextlib import suppress
+from typing import Optional
 
 import aio_pika
 import click
@@ -41,12 +43,16 @@ logger = get_root_logger()
 
 click_completion.init()
 
+Database = str
+
 
 class MetricQSpy(metricq.HistoryClient):
     def __init__(self, server):
         super().__init__("spy", server, add_uuid=True)
+        self._data_locations: Optional[asyncio.Queue[Database]] = None
 
     async def spy(self, patterns):
+        self._data_locations = asyncio.Queue()
         await self.connect()
 
         for pattern in patterns:
@@ -56,29 +62,38 @@ class MetricQSpy(metricq.HistoryClient):
                 historic=None,
             )
 
-            for metric, metadata in result.items():
-                click.echo(click.style(metric, fg="cyan"), nl=False)
-                click.echo(metadata)
+            assert isinstance(result, dict), "No metadata in result of get_metrics"
 
-                if "historic" in metadata and metadata["historic"]:
-                    try:
+            now = metricq.Timestamp.now()
+            window = metricq.Timedelta.from_s(60)
+            for metric, metadata in result.items():
+                if metadata.get("historic", False):
+                    with suppress(asyncio.TimeoutError):
                         await self.history_data_request(
                             metric,
-                            start_time=metricq.Timestamp.ago(
-                                metricq.Timedelta.from_s(60)
-                            ),
-                            end_time=metricq.Timestamp.now(),
-                            interval_max=metricq.Timedelta.from_s(60),
+                            start_time=now - window,
+                            end_time=now,
+                            interval_max=window,
                             timeout=5,
                         )
-                    except asyncio.TimeoutError:
-                        pass
+                        database = await self._data_locations.get()
+                        click.echo(
+                            "{metric} (stored on {database}): {metadata}".format(
+                                metric=click.style(metric, fg="cyan"),
+                                database=click.style(database, fg="red"),
+                                metadata={
+                                    k: v
+                                    for k, v in metadata.items()
+                                    if not k.startswith("_")
+                                },
+                            )
+                        )
 
         await self.stop()
 
-    async def _on_history_response(self, message: aio_pika.Message):
-        click.echo("Stored on: ", nl=False)
-        click.echo(click.style(message.app_id, fg="red"))
+    async def _on_history_response(self, message: aio_pika.IncomingMessage):
+        database = message.app_id
+        self._data_locations.put_nowait(database)
 
         await super()._on_history_response(message)
 
