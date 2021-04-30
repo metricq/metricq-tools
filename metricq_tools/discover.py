@@ -29,7 +29,6 @@
 
 import asyncio
 import datetime
-import logging
 import re
 from enum import Enum
 from enum import auto as enum_auto
@@ -45,12 +44,9 @@ from dateutil.parser import isoparse as parse_iso_datetime
 from dateutil.tz import tzlocal
 from metricq.types import Timedelta
 
-logger = metricq.get_logger()
-logger.setLevel(logging.WARN)
-click_log.basic_config(logger)
-logger.handlers[0].formatter = logging.Formatter(
-    fmt="%(asctime)s [%(levelname)-8s] [%(name)-20s] %(message)s"
-)
+from .logging import get_root_logger
+
+logger = get_root_logger()
 
 click_completion.init()
 

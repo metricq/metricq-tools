@@ -27,7 +27,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import logging
 from contextlib import suppress
 
 import aio_pika
@@ -38,14 +37,10 @@ import metricq
 import numpy as np
 import termplotlib as tpl
 from metricq.datachunk_pb2 import DataChunk
-from metricq.logging import get_logger
 
-logger = get_logger()
+from .logging import get_root_logger
 
-click_log.basic_config(logger)
-logger.handlers[0].formatter = logging.Formatter(
-    fmt="%(asctime)s [%(levelname)-8s] [%(name)-20s] %(message)s"
-)
+logger = get_root_logger()
 
 click_completion.init()
 

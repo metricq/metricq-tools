@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2020, ZIH, Technische Universitaet Dresden, Federal Republic of Germany
+# Copyright (c) 2021, ZIH, Technische Universitaet Dresden, Federal Republic of Germany
 #
 # All rights reserved.
 #
@@ -27,48 +27,17 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import click
-import click_completion
+import metricq
+import logging
 import click_log
-from metricq import Source, Timestamp
-
-from .logging import get_root_logger
-
-logger = get_root_logger()
-
-click_completion.init()
 
 
-class MetricQSend(Source):
-    def __init__(self, metric, timestamp, value, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.metric = metric
-        self.timestamp = timestamp
-        self.value = value
+def get_root_logger():
+    logger = metricq.get_logger()
+    logger.setLevel(logging.WARN)
+    click_log.basic_config(logger)
+    # logger.handlers[0].formatter = logging.Formatter(
+    #     fmt="%(asctime)s [%(levelname)-8s] [%(name)-20s] %(message)s"
+    # )
 
-    async def task(self):
-        await self.send(self.metric, time=self.timestamp, value=self.value)
-        await self.stop()
-
-
-@click.command()
-@click_log.simple_verbosity_option(logger, default="warning")
-@click.option("--server", default="amqp://localhost/")
-@click.option("--token", default="source-send")
-@click.option("--timestamp", default=Timestamp.now())
-@click.argument("metric", required=True)
-@click.argument("value", required=True, type=float)
-def main(server, token, timestamp, metric, value):
-    send = MetricQSend(
-        token=token,
-        management_url=server,
-        metric=metric,
-        timestamp=timestamp,
-        value=value,
-    )
-
-    send.run()
-
-
-if __name__ == "__main__":
-    main()
+    return logger

@@ -28,7 +28,6 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import asyncio
-import logging
 
 import aio_pika
 import click
@@ -36,12 +35,9 @@ import click_completion
 import click_log
 import metricq
 
-logger = metricq.get_logger()
-logger.setLevel(logging.WARN)
-click_log.basic_config(logger)
-logger.handlers[0].formatter = logging.Formatter(
-    fmt="%(asctime)s [%(levelname)-8s] [%(name)-20s] %(message)s"
-)
+from .logging import get_root_logger
+
+logger = get_root_logger()
 
 click_completion.init()
 
@@ -88,7 +84,7 @@ class MetricQSpy(metricq.HistoryClient):
 
 
 @click.command()
-@click_log.simple_verbosity_option(logger)
+@click_log.simple_verbosity_option(logger, default="warning")
 @click.option("--server", default="amqp://localhost/")
 @click.argument("metrics", required=True, nargs=-1)
 def main(server, metrics):
