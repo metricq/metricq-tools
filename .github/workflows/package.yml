@@ -75,6 +75,7 @@ jobs:
     name: Publish package to PyPI
     needs:
       - test
+      - lint
       - build
     runs-on: ubuntu-latest
 
