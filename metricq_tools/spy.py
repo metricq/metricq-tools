@@ -40,7 +40,8 @@ import metricq
 from metricq.types import Metric
 
 from .logging import get_root_logger
-from .utils import CommandLineChoice
+from .utils import ChoiceParam, CommandLineChoice, metricq_server_option
+from .version import version as client_version
 
 logger = get_root_logger()
 
@@ -53,6 +54,13 @@ class OutputFormat(CommandLineChoice, Enum):
     Pretty = auto()
     Json = auto()
 
+    @classmethod
+    def default(cls):
+        return OutputFormat.Pretty
+
+
+FORMAT = ChoiceParam(OutputFormat, "format")
+
 
 class SpyResults(TypedDict):
     location: Database
@@ -61,7 +69,7 @@ class SpyResults(TypedDict):
 
 class MetricQSpy(metricq.HistoryClient):
     def __init__(self, server):
-        super().__init__("spy", server, add_uuid=True)
+        super().__init__("spy", server, client_version=client_version, add_uuid=True)
         self._data_locations: Optional[asyncio.Queue[Database]] = None
 
     async def spy(self, patterns, *, output_format: OutputFormat):
@@ -125,17 +133,19 @@ class MetricQSpy(metricq.HistoryClient):
 
 @click.command()
 @click_log.simple_verbosity_option(logger, default="warning")
-@click.option("--server", default="amqp://localhost/")
+@metricq_server_option()
 @click.option(
     "--format",
-    type=click.Choice(OutputFormat.as_choice_list(), case_sensitive=False),
-    default=OutputFormat.Pretty.as_choice(),
+    type=FORMAT,
+    default=OutputFormat.default(),
+    show_default=OutputFormat.default().as_choice(),
+    help="Print results in this format",
 )
 @click.argument("metrics", required=True, nargs=-1)
-def main(server, format, metrics):
+def main(server, format: OutputFormat, metrics):
     spy = MetricQSpy(server)
 
-    asyncio.run(spy.spy(metrics, output_format=OutputFormat.from_choice(format)))
+    asyncio.run(spy.spy(metrics, output_format=format))
 
 
 if __name__ == "__main__":

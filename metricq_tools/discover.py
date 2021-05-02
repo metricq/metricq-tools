@@ -44,7 +44,8 @@ from dateutil.tz import tzlocal
 from metricq.types import Timedelta
 
 from .logging import get_root_logger
-from .utils import CommandLineChoice
+from .utils import ChoiceParam, CommandLineChoice, DurationParam, metricq_server_option
+from .version import version as client_version
 
 logger = get_root_logger()
 
@@ -53,6 +54,15 @@ click_completion.init()
 
 class IgnoredEvent(CommandLineChoice, Enum):
     ErrorResponses = enum_auto()
+
+    @classmethod
+    def default(cls):
+        return cls.ErrorResponses
+
+
+IGNORED_EVENT = ChoiceParam(IgnoredEvent, "ignored")
+
+TIMEOUT = DurationParam(default=None)
 
 
 class DiscoverErrorResponse(ValueError):
@@ -229,19 +239,22 @@ class MetricQDiscover(metricq.Agent):
 
 
 @click.command()
-@click_log.simple_verbosity_option(logger, default="warning")
-@click.option("--server", default="amqp://localhost/")
-@click.option("-t", "--timeout", default="30s")
+@click.version_option(version=client_version)
+@metricq_server_option()
 @click.option(
-    "--ignore",
-    type=click.Choice(IgnoredEvent.as_choice_list(), case_sensitive=False),
-    multiple=True,
+    "-t",
+    "--timeout",
+    type=TIMEOUT,
+    default=TIMEOUT.default,
+    help="Wait at most this long for replies.",
 )
-def main(server, timeout: str, ignore):
+@click.option("--ignore", type=IGNORED_EVENT, multiple=True, help="Messages to ignore.")
+@click_log.simple_verbosity_option(logger, default="warning")
+def main(server, timeout: Timedelta, ignore):
     d = MetricQDiscover(
         server,
-        timeout=Timedelta.from_string(timeout),
-        ignore_events=set(IgnoredEvent.from_choice(event) for event in ignore),
+        timeout=timeout,
+        ignore_events=set(event for event in ignore),
     )
 
     asyncio.run(d.discover())

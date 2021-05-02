@@ -31,8 +31,12 @@ import click
 import click_completion
 import click_log
 from metricq import Source, Timestamp
+from metricq.types import Metric
+
+from metricq_tools.utils import TIMESTAMP, metricq_server_option, metricq_token_option
 
 from .logging import get_root_logger
+from .version import version as client_version
 
 logger = get_root_logger()
 
@@ -41,7 +45,7 @@ click_completion.init()
 
 class MetricQSend(Source):
     def __init__(self, metric, timestamp, value, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, client_version=client_version, **kwargs)
         self.metric = metric
         self.timestamp = timestamp
         self.value = value
@@ -53,12 +57,20 @@ class MetricQSend(Source):
 
 @click.command()
 @click_log.simple_verbosity_option(logger, default="warning")
-@click.option("--server", default="amqp://localhost/")
-@click.option("--token", default="source-send")
-@click.option("--timestamp", default=Timestamp.now())
+@click.version_option(version=client_version)
+@metricq_server_option()
+@metricq_token_option(default="source-send")
+@click.option(
+    "--timestamp",
+    type=TIMESTAMP,
+    default=Timestamp.now(),
+    show_default="now",
+    help="Timestamp to send.",
+)
 @click.argument("metric", required=True)
 @click.argument("value", required=True, type=float)
-def main(server, token, timestamp, metric, value):
+def main(server: str, token: str, timestamp: Timestamp, metric: Metric, value: float):
+    """Send a single time-value pair for the given metric."""
     send = MetricQSend(
         token=token,
         management_url=server,

@@ -38,7 +38,10 @@ import numpy as np
 import termplotlib as tpl
 from metricq.datachunk_pb2 import DataChunk
 
+from metricq_tools.utils import metricq_server_option, metricq_token_option
+
 from .logging import get_root_logger
+from .version import version as client_version
 
 logger = get_root_logger()
 
@@ -69,7 +72,7 @@ class InspectSink(metricq.Sink):
         self.intervals = []
         self.values = []
         self.chunk_sizes = []
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, client_version=client_version, **kwargs)
 
     async def connect(self):
         await super().connect()
@@ -199,11 +202,9 @@ class InspectSink(metricq.Sink):
             self.print_values_histogram()
 
 
-@click.command(
-    short_help="A tool usable to get an idea about the *current* behavior of a given metric. By definition, this only exploits live data."
-)
-@click.option("--server", default="amqp://localhost/")
-@click.option("--token", default="metricq-inspect")
+@click.command()
+@metricq_server_option()
+@metricq_token_option(default="metricq-inspect")
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",
@@ -225,6 +226,7 @@ class InspectSink(metricq.Sink):
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
 @click.argument("metric", required=True, nargs=1)
 @click_log.simple_verbosity_option(logger, default="WARNING")
+@click.version_option(version=client_version)
 def main(
     server,
     token,
@@ -234,6 +236,11 @@ def main(
     chunk_sizes_histogram,
     print_data_points,
 ):
+    """Live metric data analysis and inspection on the MetricQ network.
+
+    Consumes new data points for the given metric as they are submitted to the
+    network, prints a statistical overview on exit.
+    """
     sink = InspectSink(
         metric=metric,
         token=token,
