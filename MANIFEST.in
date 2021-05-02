@@ -5,3 +5,6 @@ include pyproject.toml
 include *.md
 
 exclude .pre-commit-config.yaml
+
+# added by check-manifest
+recursive-include tests *.py

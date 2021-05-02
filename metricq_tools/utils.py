@@ -109,7 +109,11 @@ class TimestampParam(ParamType):
             try:
                 return Timestamp.from_iso8601(value)
             except ValueError:
-                self.fail("expected an ISO-8601 timestamp (e.g. 2012-12-21T00:00:00+Z)")
+                self.fail(
+                    "expected an ISO-8601 timestamp (e.g. 2012-12-21T00:00:00Z)",
+                    param=param,
+                    ctx=ctx,
+                )
         else:
             return value
 
