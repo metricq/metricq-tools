@@ -1,0 +1,101 @@
+name: Test, build and publish the Python package
+
+on: [push]
+
+env:
+  PYTHON_VERSION: "3.9"
+
+jobs:
+  test:
+    name: Run package tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9"]
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install '.[test]'
+    - name: Test with pytest
+      run: pytest
+
+  lint:
+    name: Run linters
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install '.[lint]'
+    - name: Check code formatting with black
+      run: black
+    - name: Check code style with flake8
+      run: flake8
+    - name: Check import order with isort
+      run: isort
+    - name: Check package manifest with check-manifest
+      run: check-manifest
+
+  build:
+    name: Build distribution artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+    - name: Build wheel
+      run: |
+        pip wheel --wheel-dir dist/ .
+    - name: Upload distribution artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: distribution-packages
+        path: dist/metricq_tools-*.whl
+
+  publish:
+    name: Publish package to PyPI
+    needs:
+      - test
+      - build
+    runs-on: ubuntu-latest
+
+    # If a new tag is pushed, publish a release to PyPI.
+    # This is rather fail-safe.  If the tag name does not look like a version,
+    # either setuptools_scm will refuse to build the package, a test will fail
+    # or PyPI will reject the release.  If it does look like a release, it's
+    # fine as long as no one accidentally pushes a tag named `x.y.z`.
+    #
+    # Pushing `x.y.z.devN` is fine though, it will be displayed as a
+    # pre-release verion on PyPI.
+    if: startsWith(github.ref, 'refs/tags')
+
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v2.0.8
+        with:
+          name: distribution-packages
+          path: dist/
+      - name: Publish a Python distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.pypi_password }}
