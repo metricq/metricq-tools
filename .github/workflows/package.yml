@@ -41,11 +41,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install '.[lint]'
     - name: Check code formatting with black
-      run: black
+      run: black --check --diff .
     - name: Check code style with flake8
-      run: flake8
+      run: flake8 .
     - name: Check import order with isort
-      run: isort
+      run: isort --check --diff .
     - name: Check package manifest with check-manifest
       run: check-manifest
 
