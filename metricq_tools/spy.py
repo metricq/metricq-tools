@@ -143,6 +143,7 @@ class MetricQSpy(metricq.HistoryClient):
 )
 @click.argument("metrics", required=True, nargs=-1)
 def main(server, format: OutputFormat, metrics):
+    """Obtain metadata and storage location for a set of metrics."""
     spy = MetricQSpy(server)
 
     asyncio.run(spy.spy(metrics, output_format=format))

@@ -251,6 +251,7 @@ class MetricQDiscover(metricq.Agent):
 @click.option("--ignore", type=IGNORED_EVENT, multiple=True, help="Messages to ignore.")
 @click_log.simple_verbosity_option(logger, default="warning")
 def main(server, timeout: Timedelta, ignore):
+    """Send a RPC broadcast on the MetricQ network and wait for replies from online clients."""
     d = MetricQDiscover(
         server,
         timeout=timeout,
