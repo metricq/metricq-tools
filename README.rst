@@ -2,6 +2,10 @@
 :code:`metricq-tools`
 =====================
 
+|Python package|
+
+.. |Python package| image:: https://github.com/metricq/metricq-tools/actions/workflows/package.yml/badge.svg
+
 Tools and utility scripts to monitor and administrate a MetricQ network.
 
 This repository includes a Python package that installs the following
