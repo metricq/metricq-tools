@@ -29,11 +29,13 @@
 
 import asyncio
 import datetime
+from asyncio import CancelledError, Queue
 from enum import Enum
 from enum import auto as enum_auto
-from typing import Any, Dict, Optional, Set
+from typing import Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
 
 import aio_pika
+import async_timeout
 import click
 import click_completion
 import click_log
@@ -44,7 +46,14 @@ from dateutil.tz import tzlocal
 from metricq.types import Timedelta
 
 from .logging import get_root_logger
-from .utils import ChoiceParam, CommandLineChoice, DurationParam, metricq_server_option
+from .utils import (
+    ChoiceParam,
+    CommandLineChoice,
+    DurationParam,
+    OutputFormat,
+    metricq_server_option,
+    output_format_option,
+)
 from .version import version as client_version
 
 logger = get_root_logger()
@@ -73,6 +82,7 @@ class DiscoverResponse:
     def __init__(
         self,
         alive: bool = True,
+        error: Optional[str] = None,
         current_time: Optional[str] = None,
         starting_time: Optional[str] = None,
         uptime: Optional[int] = None,
@@ -82,6 +92,7 @@ class DiscoverResponse:
         hostname: Optional[str] = None,
     ):
         self.alive = alive
+        self.error = error
         self.metricq_version = metricq_version
         self.python_version = python_version
         self.client_version = client_version
@@ -106,12 +117,9 @@ class DiscoverResponse:
 
     @staticmethod
     def parse(response: Dict[str, Any]) -> "DiscoverResponse":
-        error = response.get("error")
-        if error is not None:
-            raise DiscoverErrorResponse(error)
-
         return DiscoverResponse(
             alive=bool(response.get("alive")),
+            error=response.get("error"),
             starting_time=response.get("startingTime"),
             current_time=response.get("currentTime"),
             uptime=response.get("uptime"),
@@ -135,6 +143,10 @@ class DiscoverResponse:
 
     def _fmt_parts(self):
         unknown_color = "bright_white"
+
+        if self.error is not None:
+            yield click.style(f"error: {self.error}", fg="bright_red")
+            return
 
         alive = "alive" if self.alive else click.style("dead", fg="bright_red")
         yield f"currently {alive},"
@@ -186,14 +198,14 @@ def echo_status(status: Status, token: str, msg: str):
 
 
 class MetricQDiscover(metricq.Agent):
-    def __init__(
-        self, server, timeout: Optional[Timedelta], ignore_events: Set[IgnoredEvent]
-    ):
+    def __init__(self, server):
         super().__init__("discover", server, add_uuid=True)
-        self.timeout = timeout
-        self.ignore_events: Set[IgnoredEvent] = ignore_events
+        self._response_queue: Queue[Tuple[str, dict]] = Queue()
 
-    async def discover(self):
+    async def discover(
+        self,
+        timeout: Optional[Timedelta],
+    ) -> AsyncGenerator[Tuple[str, dict], None]:
         await self.connect()
         await self.rpc_consume()
 
@@ -213,34 +225,49 @@ class MetricQDiscover(metricq.Agent):
             cleanup_on_response=False,
         )
 
-        if self.timeout is None:
-            await self.stopped()
-        else:
-            await asyncio.sleep(self.timeout.s)
+        return self.responses(timeout)
 
     def on_discover(self, from_token, **response):
         logger.debug("response: {}", response)
-        try:
-            self.pretty_print(
-                from_token,
-                response=DiscoverResponse.parse(response),
-            )
-        except DiscoverErrorResponse as error:
-            if IgnoredEvent.ErrorResponses in self.ignore_events:
-                logger.debug(f"Ignored error response from {from_token}: {error}")
-                return
+        self._response_queue.put_nowait((from_token, response))
 
-            error_msg = click.style(str(error), fg="bright_red")
-            echo_status(
-                Status.Error,
-                from_token,
-                f"response indicated an error: {error_msg}",
-            )
+    async def responses(
+        self, timeout: Optional[Timedelta]
+    ) -> AsyncGenerator[Tuple[str, dict], None]:
+        timeout_sec = timeout.s if timeout is not None else None
+        async with async_timeout.timeout(timeout_sec):
+            while True:
+                try:
+                    yield await self._response_queue.get()
+                except CancelledError:
+                    return
 
-    def pretty_print(self, from_token, response: DiscoverResponse):
-        status = Status.Ok if response.alive else Status.Warning
 
-        echo_status(status, from_token, str(response))
+async def discover(
+    server: str,
+    timeout: Optional[Timedelta],
+    ignored_events: Set[IgnoredEvent],
+    format: OutputFormat,
+):
+    discoverer = MetricQDiscover(server)
+
+    responses = await discoverer.discover(timeout=timeout)
+
+    if format is OutputFormat.Json:
+        import json
+
+        responses = {from_token: response async for (from_token, response) in responses}
+        print(json.dumps(responses))
+    elif format is OutputFormat.Pretty:
+        async for (from_token, response) in responses:
+            response = DiscoverResponse.parse(response)
+            if not response.error:
+                status = Status.Ok if response.alive else Status.Warning
+                echo_status(status, from_token, str(response))
+            elif IgnoredEvent.ErrorResponses not in ignored_events:
+                echo_status(Status.Error, from_token, str(response))
+
+    await discoverer.stop()
 
 
 @click.command()
@@ -253,17 +280,25 @@ class MetricQDiscover(metricq.Agent):
     default=TIMEOUT.default,
     help="Wait at most this long for replies.",
 )
+@output_format_option()
 @click.option("--ignore", type=IGNORED_EVENT, multiple=True, help="Messages to ignore.")
 @click_log.simple_verbosity_option(logger, default="warning")
-def main(server, timeout: Optional[Timedelta], ignore):
+def main(
+    server: str,
+    timeout: Optional[Timedelta],
+    format: OutputFormat,
+    ignore: List[IgnoredEvent],
+):
     """Send a RPC broadcast on the MetricQ network and wait for replies from online clients."""
-    d = MetricQDiscover(
-        server,
-        timeout=timeout,
-        ignore_events=set(event for event in ignore),
-    )
 
-    asyncio.run(d.discover())
+    asyncio.run(
+        discover(
+            server=server,
+            timeout=timeout,
+            format=format,
+            ignored_events=set(event for event in ignore),
+        )
+    )
 
 
 if __name__ == "__main__":

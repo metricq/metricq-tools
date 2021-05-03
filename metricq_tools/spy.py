@@ -29,7 +29,6 @@
 
 import asyncio
 from contextlib import suppress
-from enum import Enum, auto
 from typing import Any, Dict, Optional, TypedDict
 
 import aio_pika
@@ -40,7 +39,7 @@ import metricq
 from metricq.types import Metric
 
 from .logging import get_root_logger
-from .utils import ChoiceParam, CommandLineChoice, metricq_server_option
+from .utils import OutputFormat, metricq_server_option, output_format_option
 from .version import version as client_version
 
 logger = get_root_logger()
@@ -48,18 +47,6 @@ logger = get_root_logger()
 click_completion.init()
 
 Database = str
-
-
-class OutputFormat(CommandLineChoice, Enum):
-    Pretty = auto()
-    Json = auto()
-
-    @classmethod
-    def default(cls):
-        return OutputFormat.Pretty
-
-
-FORMAT = ChoiceParam(OutputFormat, "format")
 
 
 class SpyResults(TypedDict):
@@ -134,13 +121,7 @@ class MetricQSpy(metricq.HistoryClient):
 @click.command()
 @click_log.simple_verbosity_option(logger, default="warning")
 @metricq_server_option()
-@click.option(
-    "--format",
-    type=FORMAT,
-    default=OutputFormat.default(),
-    show_default=OutputFormat.default().as_choice(),
-    help="Print results in this format",
-)
+@output_format_option()
 @click.argument("metrics", required=True, nargs=-1)
 def main(server, format: OutputFormat, metrics):
     """Obtain metadata and storage location for a set of metrics."""

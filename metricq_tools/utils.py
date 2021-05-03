@@ -1,4 +1,5 @@
 import re
+from enum import Enum, auto
 from typing import Any, Generic, List, Optional, Type, TypeVar, Union
 
 from click import Context, Parameter, ParamType, option
@@ -68,6 +69,28 @@ class ChoiceParam(Generic[ChoiceType], ParamType):
                 param=param,
                 ctx=ctx,
             )
+
+
+class OutputFormat(CommandLineChoice, Enum):
+    Pretty = auto()
+    Json = auto()
+
+    @classmethod
+    def default(cls):
+        return OutputFormat.Pretty
+
+
+FORMAT = ChoiceParam(OutputFormat, "format")
+
+
+def output_format_option():
+    return option(
+        "--format",
+        type=FORMAT,
+        default=OutputFormat.default(),
+        show_default=OutputFormat.default().as_choice(),
+        help="Print results in this format",
+    )
 
 
 class DurationParam(ParamType):
