@@ -186,7 +186,9 @@ def echo_status(status: Status, token: str, msg: str):
 
 
 class MetricQDiscover(metricq.Agent):
-    def __init__(self, server, timeout: Timedelta, ignore_events: Set[IgnoredEvent]):
+    def __init__(
+        self, server, timeout: Optional[Timedelta], ignore_events: Set[IgnoredEvent]
+    ):
         super().__init__("discover", server, add_uuid=True)
         self.timeout = timeout
         self.ignore_events: Set[IgnoredEvent] = ignore_events
@@ -211,7 +213,10 @@ class MetricQDiscover(metricq.Agent):
             cleanup_on_response=False,
         )
 
-        await asyncio.sleep(self.timeout.s)
+        if self.timeout is None:
+            await self.stopped()
+        else:
+            await asyncio.sleep(self.timeout.s)
 
     def on_discover(self, from_token, **response):
         logger.debug("response: {}", response)
@@ -250,7 +255,7 @@ class MetricQDiscover(metricq.Agent):
 )
 @click.option("--ignore", type=IGNORED_EVENT, multiple=True, help="Messages to ignore.")
 @click_log.simple_verbosity_option(logger, default="warning")
-def main(server, timeout: Timedelta, ignore):
+def main(server, timeout: Optional[Timedelta], ignore):
     """Send a RPC broadcast on the MetricQ network and wait for replies from online clients."""
     d = MetricQDiscover(
         server,
