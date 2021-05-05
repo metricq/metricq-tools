@@ -29,10 +29,12 @@
 
 import asyncio
 import datetime
+import json
 from asyncio import CancelledError, Queue
+from contextlib import asynccontextmanager
 from enum import Enum
 from enum import auto as enum_auto
-from typing import Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
+from typing import IO, Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
 
 import aio_pika
 import async_timeout
@@ -243,36 +245,106 @@ class MetricQDiscover(metricq.Agent):
                     return
 
 
+def print_diff(
+    previous: Dict[str, dict],
+    current: Dict[str, dict],
+    format: OutputFormat,
+):
+    previous_clients = set(previous.keys())
+    current_clients = set(current.keys())
+
+    missing = previous_clients - current_clients
+    additional = current_clients - previous_clients
+    # reconnected = {
+    #     client_token
+    #     for client_token in current_clients & previous_clients
+    #     if responses[client_token].get("startingTime")
+    #     != previous[client_token].get("startingTime")
+    # }
+
+    if format is OutputFormat.Json:
+        print(
+            json.dumps(
+                {
+                    "missing": {tok: previous[tok] for tok in missing},
+                    "additional": {tok: current[tok] for tok in additional},
+                }
+            )
+        )
+    elif format is OutputFormat.Pretty:
+
+        def print_list(heading: str, clients: set[str], bullet="*"):
+            if clients:
+                click.echo(heading)
+                for client_token in sorted(clients):
+                    click.echo(f"{bullet} {client_token}")
+
+        print_list(
+            f"{click.style('Missing', fg='bright_red')} clients:",
+            missing,
+            bullet="-",
+        )
+        print_list(
+            f"{click.style('Additional', fg='bright_green')} clients:",
+            additional,
+            bullet="+",
+        )
+
+
+@asynccontextmanager
+async def stopping(client: MetricQDiscover):
+    try:
+        yield client
+    finally:
+        await client.stop()
+
+
 async def discover(
     server: str,
+    diff: Optional[IO],
     timeout: Optional[Timedelta],
     ignored_events: Set[IgnoredEvent],
     format: OutputFormat,
 ):
-    discoverer = MetricQDiscover(server)
+    async with stopping(MetricQDiscover(server)) as discoverer:
+        responses = await discoverer.discover(timeout=timeout)
 
-    responses = await discoverer.discover(timeout=timeout)
+        if diff:
+            previous = json.load(diff)
+            current = {
+                from_token: response async for (from_token, response) in responses
+            }
 
-    if format is OutputFormat.Json:
-        import json
+            print_diff(previous=previous, current=current, format=format)
+            return
 
-        responses = {from_token: response async for (from_token, response) in responses}
-        print(json.dumps(responses))
-    elif format is OutputFormat.Pretty:
-        async for (from_token, response) in responses:
-            response = DiscoverResponse.parse(response)
-            if not response.error:
-                status = Status.Ok if response.alive else Status.Warning
-                echo_status(status, from_token, str(response))
-            elif IgnoredEvent.ErrorResponses not in ignored_events:
-                echo_status(Status.Error, from_token, str(response))
+        if format is OutputFormat.Json:
 
-    await discoverer.stop()
+            responses = {
+                from_token: response async for (from_token, response) in responses
+            }
+            print(json.dumps(responses))
+
+        elif format is OutputFormat.Pretty:
+            async for (from_token, response) in responses:
+                response = DiscoverResponse.parse(response)
+                if not response.error:
+                    status = Status.Ok if response.alive else Status.Warning
+                    echo_status(status, from_token, str(response))
+                elif IgnoredEvent.ErrorResponses not in ignored_events:
+                    echo_status(Status.Error, from_token, str(response))
 
 
 @click.command()
 @click.version_option(version=client_version)
 @metricq_server_option()
+@click.option(
+    "-d",
+    "--diff",
+    type=click.File(encoding="utf-8"),
+    metavar="JSON_FILE",
+    help="Show a diff to a list of previously discovered clients (produced with --format=json)",
+)
 @click.option(
     "-t",
     "--timeout",
@@ -285,6 +357,7 @@ async def discover(
 @click_log.simple_verbosity_option(logger, default="warning")
 def main(
     server: str,
+    diff: Optional[IO],
     timeout: Optional[Timedelta],
     format: OutputFormat,
     ignore: List[IgnoredEvent],
@@ -294,6 +367,7 @@ def main(
     asyncio.run(
         discover(
             server=server,
+            diff=diff,
             timeout=timeout,
             format=format,
             ignored_events=set(event for event in ignore),
