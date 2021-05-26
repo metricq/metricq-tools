@@ -29,6 +29,7 @@
 
 from contextlib import suppress
 
+import asyncio
 import aio_pika
 import click
 import click_completion
@@ -83,10 +84,28 @@ class SummarySink(metricq.Sink):
 
         click.echo(
             click.style(
-                f"Inspecting the metric '{self._metric}'... (Hit ctrl+C to stop)",
+                f"Inspecting the metric '{self._metric}'...",
                 fg="green",
             )
         )
+
+        await self.run_cmd()
+
+    async def run_cmd(self):
+        click.echo(f'running... `{self.command!r}`')
+
+        proc = await asyncio.create_subprocess_shell(
+            self.command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE)
+
+        stdout, stderr = await proc.communicate()
+
+        click.echo(f'`{self.command!r}` exited with {proc.returncode}')
+        if stdout:
+            click.echo(stdout.decode())
+        if stderr:
+            click.echo(stderr.decode())
 
     async def _on_data_message(self, message: aio_pika.IncomingMessage):
         async with message.process(requeue=True):
