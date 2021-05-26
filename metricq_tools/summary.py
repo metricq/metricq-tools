@@ -92,6 +92,7 @@ class SummarySink(metricq.Sink):
         await self.run_cmd()
 
         await self.stop()
+        self.print_histograms()
 
     async def run_cmd(self):
         click.echo(f'running... {self.command!r}')
