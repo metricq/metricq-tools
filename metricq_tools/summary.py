@@ -91,8 +91,10 @@ class SummarySink(metricq.Sink):
 
         await self.run_cmd()
 
+        await self.stop()
+
     async def run_cmd(self):
-        click.echo(f'running... `{self.command!r}`')
+        click.echo(f'running... {self.command!r}')
 
         proc = await asyncio.create_subprocess_shell(
             self.command,
@@ -101,7 +103,7 @@ class SummarySink(metricq.Sink):
 
         stdout, stderr = await proc.communicate()
 
-        click.echo(f'`{self.command!r}` exited with {proc.returncode}')
+        click.echo(f'{self.command!r} exited with {proc.returncode}')
         if stdout:
             click.echo(stdout.decode())
         if stderr:
