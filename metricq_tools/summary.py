@@ -159,8 +159,6 @@ class SummarySink(metricq.Sink):
                 )
 
             click.echo()
-
-            self.print_histograms()
         finally:
             super().on_signal(signal)
 
