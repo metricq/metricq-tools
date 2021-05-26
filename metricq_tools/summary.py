@@ -56,6 +56,7 @@ class SummarySink(metricq.Sink):
         chunk_sizes_histogram: bool,
         values_histogram: bool,
         print_data: bool,
+        command: str,
         *args,
         **kwargs,
     ):
@@ -66,6 +67,7 @@ class SummarySink(metricq.Sink):
         self.print_chunk_sizes = chunk_sizes_histogram
         self.print_values = values_histogram
         self.print_data = print_data
+        self.command = command
 
         self.timestamps = []
         self.last_timestamp = None
@@ -227,6 +229,7 @@ class SummarySink(metricq.Sink):
 @click.argument("metric", required=True, nargs=1)
 @click_log.simple_verbosity_option(logger, default="WARNING")
 @click.version_option(version=client_version)
+@click.argument('command', nargs=-1)
 def main(
     server,
     token,
@@ -235,12 +238,15 @@ def main(
     values_histogram,
     chunk_sizes_histogram,
     print_data_points,
+    command,
 ):
     """Live metric data analysis and inspection on the MetricQ network.
 
     Consumes new data points for the given metric as they are submitted to the
     network, prints a statistical overview on exit.
     """
+
+    command_str = " ".join(command)
     sink = SummarySink(
         metric=metric,
         token=token,
@@ -249,6 +255,7 @@ def main(
         chunk_sizes_histogram=chunk_sizes_histogram,
         values_histogram=values_histogram,
         print_data=print_data_points,
+        command=command_str,
     )
     sink.run()
 
