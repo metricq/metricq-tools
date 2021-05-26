@@ -52,7 +52,7 @@ click_completion.init()
 class SummarySink(metricq.Sink):
     def __init__(
         self,
-        metric: str,
+        metrics: list[str],
         intervals_histogram: bool,
         chunk_sizes_histogram: bool,
         values_histogram: bool,
@@ -61,7 +61,7 @@ class SummarySink(metricq.Sink):
         *args,
         **kwargs,
     ):
-        self._metric = metric
+        self._metrics = metrics
         self.tokens = {}
 
         self.print_intervals = intervals_histogram
@@ -80,14 +80,14 @@ class SummarySink(metricq.Sink):
     async def connect(self):
         await super().connect()
 
-        await self.subscribe([self._metric])
-
         click.echo(
             click.style(
-                f"Inspecting the metric '{self._metric}'...",
+                f"Inspecting the metric '{self._metrics}'...",
                 fg="green",
             )
         )
+
+        await self.subscribe(self._metrics)
 
         await self.run_cmd()
 
@@ -246,7 +246,7 @@ class SummarySink(metricq.Sink):
     help="Show an histogram of the observed chunk sizes of all messages received.",
 )
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
-@click.argument("metric", required=True, nargs=1)
+@click.option("-m","--metric", required=True, multiple=True)
 @click_log.simple_verbosity_option(logger, default="WARNING")
 @click.version_option(version=client_version)
 @click.argument('command', nargs=-1)
@@ -268,7 +268,7 @@ def main(
 
     command_str = " ".join(command)
     sink = SummarySink(
-        metric=metric,
+        metrics=metric,
         token=token,
         management_url=server,
         intervals_histogram=intervals_histogram,
