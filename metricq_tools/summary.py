@@ -56,6 +56,7 @@ class SummarySink(metricq.Sink):
         intervals_histogram: bool,
         chunk_sizes_histogram: bool,
         values_histogram: bool,
+        print_stats: bool,
         print_data: bool,
         command: str,
         *args,
@@ -67,14 +68,24 @@ class SummarySink(metricq.Sink):
         self.print_intervals = intervals_histogram
         self.print_chunk_sizes = chunk_sizes_histogram
         self.print_values = values_histogram
+        self.print_stats = print_stats
         self.print_data = print_data
         self.command = command
 
-        self.timestamps = []
-        self.last_timestamp = None
-        self.intervals = []
-        self.values = []
-        self.chunk_sizes = []
+        self.timestamps = dict[str,list]()
+        self.last_timestamp = dict[str]()
+        self.intervals = dict[str,list]()
+        self.values = dict[str,list]()
+        self.chunk_sizes = dict[str,list]()
+
+        for metric in metrics:
+            self.timestamps[metric] = list()
+            self.last_timestamp[metric] = None
+            self.intervals[metric] = list()
+            self.values[metric] = list()
+            self.chunk_sizes[metric] = list()
+
+
         super().__init__(*args, client_version=client_version, **kwargs)
 
     async def connect(self):
@@ -126,7 +137,7 @@ class SummarySink(metricq.Sink):
             data_response = DataChunk()
             data_response.ParseFromString(body)
 
-            self.chunk_sizes.append(len(data_response.value))
+            self.chunk_sizes[metric].append(len(data_response.value))
 
             await self._on_data_chunk(metric, data_response)
 
@@ -134,11 +145,11 @@ class SummarySink(metricq.Sink):
         if self.print_data:
             click.echo(click.style("{}: {}".format(timestamp, value), fg="bright_blue"))
 
-        self.timestamps.append(timestamp.posix)
-        if self.last_timestamp:
-            self.intervals.append(timestamp.posix - self.last_timestamp)
-        self.last_timestamp = timestamp.posix
-        self.values.append(value)
+        self.timestamps[metric].append(timestamp.posix)
+        if self.last_timestamp[metric]:
+            self.intervals[metric].append(timestamp.posix - self.last_timestamp[metric])
+        self.last_timestamp[metric] = timestamp.posix
+        self.values[metric].append(value)
 
     def on_signal(self, signal):
         try:
@@ -162,6 +173,26 @@ class SummarySink(metricq.Sink):
         finally:
             super().on_signal(signal)
 
+    def print_statistics(self, values):
+        click.echo(
+            click.style(
+                "Statistics",
+                fg="yellow",
+            )
+        )
+        click.echo()
+
+        click.echo("{:20} = {:#.2g}".format("Minimum",np.amin(values)))
+        click.echo("{:20} = {:#.2g}".format("Maximum",np.amax(values)))
+        click.echo("{:20} = {:#.2g}".format("Average",np.average(values)))
+        click.echo("{:20} = {:#.2g}".format("Median",np.median(values)))
+        click.echo("{:20} = {:#.2g}".format("Standard deviation",np.std(values)))
+        click.echo("{:20} = {:#.2g}".format("Arithmetic mean",np.mean(values)))
+        click.echo("{:20} = {:#.2g}".format("Variance",np.var(values)))
+
+        click.echo()
+        click.echo()
+
     def print_histogram(self, values):
         counts, bin_edges = np.histogram(values, bins="doane")
         fig = tpl.figure()
@@ -177,7 +208,7 @@ class SummarySink(metricq.Sink):
         fig.barh(counts, labels=labels)
         fig.show()
 
-    def print_chunk_sizes_histogram(self):
+    def print_chunk_sizes_histogram(self, chunk_sizes):
         click.echo(
             click.style(
                 "Distribution of the chunk sizes",
@@ -186,12 +217,12 @@ class SummarySink(metricq.Sink):
         )
         click.echo()
 
-        self.print_histogram(self.chunk_sizes)
+        self.print_histogram(chunk_sizes)
 
         click.echo()
         click.echo()
 
-    def print_intervals_histogram(self):
+    def print_intervals_histogram(self, intervals):
         click.echo(
             click.style(
                 "Distribution of the duration between consecutive data points in seconds",
@@ -200,28 +231,49 @@ class SummarySink(metricq.Sink):
         )
         click.echo()
 
-        self.print_histogram(self.intervals)
+        self.print_histogram(intervals)
 
         click.echo()
         click.echo()
 
-    def print_values_histogram(self):
+    def print_values_histogram(self, values):
         click.echo(
             click.style("Distribution of the values of the data points", fg="yellow")
         )
         click.echo()
 
-        self.print_histogram(self.values)
+        self.print_histogram(values)
+
+        click.echo()
+        click.echo()
 
     def print_histograms(self):
-        if self.print_chunk_sizes:
-            self.print_chunk_sizes_histogram()
+        for metric in self._metrics:
 
-        if self.print_intervals and self.last_timestamp:
-            self.print_intervals_histogram()
+            if self.values[metric]:
+                click.echo()
+                click.echo(
+                    click.style(f"Stats of metric {metric!r}:", fg="green")
+                )
+                click.echo()
 
-        if self.print_values:
-            self.print_values_histogram()
+                if self.print_chunk_sizes:
+                    self.print_chunk_sizes_histogram(self.chunk_sizes[metric])
+
+                if self.print_intervals and self.last_timestamp[metric]:
+                    self.print_intervals_histogram(self.intervals[metric])
+
+                if self.print_values:
+                    self.print_values_histogram(self.values[metric])
+
+                if self.print_stats:
+                    self.print_statistics(self.values[metric])
+            else:
+                click.echo()
+                click.echo(
+                    click.style(f"No Data for metric {metric!r} received!", fg="red")
+                )
+                click.echo()
 
 
 @click.command()
@@ -246,6 +298,7 @@ class SummarySink(metricq.Sink):
     help="Show an histogram of the observed chunk sizes of all messages received.",
 )
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
+@click.option("--print-statistics/--no-print-statistics", "-s/-S", default=True)
 @click.option("-m","--metric", required=True, multiple=True)
 @click_log.simple_verbosity_option(logger, default="WARNING")
 @click.version_option(version=client_version)
@@ -258,6 +311,7 @@ def main(
     values_histogram,
     chunk_sizes_histogram,
     print_data_points,
+    print_statistics,
     command,
 ):
     """Live metric data analysis and inspection on the MetricQ network.
@@ -275,6 +329,7 @@ def main(
         chunk_sizes_histogram=chunk_sizes_histogram,
         values_histogram=values_histogram,
         print_data=print_data_points,
+        print_stats=print_statistics,
         command=command_str,
     )
     sink.run()
