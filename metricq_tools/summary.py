@@ -27,17 +27,16 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from contextlib import suppress
 
 import asyncio
-import aio_pika
 import click
 import click_completion
 import click_log
 import metricq
 import numpy as np
 import termplotlib as tpl
-from metricq.datachunk_pb2 import DataChunk
+from metricq.drain import Drain
+from metricq.subscriber import Subscriber
 
 from metricq_tools.utils import metricq_server_option, metricq_token_option
 
@@ -49,44 +48,37 @@ logger = get_root_logger()
 click_completion.init()
 
 
-class SummarySink(metricq.Sink):
+class SummaryDrain(Drain):
     def __init__(
         self,
         metrics: list[str],
         intervals_histogram: bool,
-        chunk_sizes_histogram: bool,
         values_histogram: bool,
         print_stats: bool,
         print_data: bool,
-        command: str,
         *args,
         **kwargs,
     ):
         self._metrics = metrics
-        self.tokens = {}
 
         self.print_intervals = intervals_histogram
-        self.print_chunk_sizes = chunk_sizes_histogram
         self.print_values = values_histogram
         self.print_stats = print_stats
         self.print_data = print_data
-        self.command = command
 
         self.timestamps = dict[str,list]()
         self.last_timestamp = dict[str]()
         self.intervals = dict[str,list]()
         self.values = dict[str,list]()
-        self.chunk_sizes = dict[str,list]()
 
         for metric in metrics:
             self.timestamps[metric] = list()
             self.last_timestamp[metric] = None
             self.intervals[metric] = list()
             self.values[metric] = list()
-            self.chunk_sizes[metric] = list()
 
 
-        super().__init__(*args, client_version=client_version, **kwargs)
+        super().__init__(*args, metrics=metrics, client_version=client_version, **kwargs)
 
     async def connect(self):
         await super().connect()
@@ -97,49 +89,6 @@ class SummarySink(metricq.Sink):
                 fg="green",
             )
         )
-
-        await self.subscribe(self._metrics)
-
-        await self.run_cmd()
-
-        await self.stop()
-        self.print_histograms()
-
-    async def run_cmd(self):
-        click.echo(f'running... {self.command!r}')
-
-        proc = await asyncio.create_subprocess_shell(
-            self.command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE)
-
-        stdout, stderr = await proc.communicate()
-
-        click.echo(f'{self.command!r} exited with {proc.returncode}')
-        if stdout:
-            click.echo(stdout.decode())
-        if stderr:
-            click.echo(stderr.decode())
-
-    async def _on_data_message(self, message: aio_pika.IncomingMessage):
-        async with message.process(requeue=True):
-            body = message.body
-            from_token = None
-            with suppress(AttributeError):
-                from_token = message.client_id
-            metric = message.routing_key
-
-            if from_token not in self.tokens:
-                self.tokens[from_token] = 0
-
-            self.tokens[from_token] += 1
-
-            data_response = DataChunk()
-            data_response.ParseFromString(body)
-
-            self.chunk_sizes[metric].append(len(data_response.value))
-
-            await self._on_data_chunk(metric, data_response)
 
     async def on_data(self, metric: str, timestamp: metricq.Timestamp, value: float):
         if self.print_data:
@@ -189,6 +138,7 @@ class SummarySink(metricq.Sink):
         click.echo("{:20} = {:#.2g}".format("Standard deviation",np.std(values)))
         click.echo("{:20} = {:#.2g}".format("Arithmetic mean",np.mean(values)))
         click.echo("{:20} = {:#.2g}".format("Variance",np.var(values)))
+        click.echo("{:20} = {:#}".format("Count",len(values)))
 
         click.echo()
         click.echo()
@@ -207,20 +157,6 @@ class SummarySink(metricq.Sink):
         )
         fig.barh(counts, labels=labels)
         fig.show()
-
-    def print_chunk_sizes_histogram(self, chunk_sizes):
-        click.echo(
-            click.style(
-                "Distribution of the chunk sizes",
-                fg="yellow",
-            )
-        )
-        click.echo()
-
-        self.print_histogram(chunk_sizes)
-
-        click.echo()
-        click.echo()
 
     def print_intervals_histogram(self, intervals):
         click.echo(
@@ -257,9 +193,6 @@ class SummarySink(metricq.Sink):
                 )
                 click.echo()
 
-                if self.print_chunk_sizes:
-                    self.print_chunk_sizes_histogram(self.chunk_sizes[metric])
-
                 if self.print_intervals and self.last_timestamp[metric]:
                     self.print_intervals_histogram(self.intervals[metric])
 
@@ -275,6 +208,22 @@ class SummarySink(metricq.Sink):
                 )
                 click.echo()
 
+async def run_cmd(command):
+    click.echo(f'running... {command!r}')
+
+    proc = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+    stdout, stderr = await proc.communicate()
+
+    click.echo(f'{command!r} exited with {proc.returncode}')
+    if stdout:
+        click.echo(stdout.decode())
+    if stderr:
+        click.echo(stderr.decode())
 
 @click.command()
 @metricq_server_option()
@@ -282,20 +231,14 @@ class SummarySink(metricq.Sink):
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",
-    default=True,
+    default=False,
     help="Show an histogram of the observed distribution of durations between data points.",
 )
 @click.option(
     "--values-histogram/--no-values-histogram",
     "-h/-H",
-    default=True,
-    help="Show an histogram of the observed metric values.",
-)
-@click.option(
-    "--chunk-sizes-histogram/--no-chunk-sizes-histogram",
-    "-c/-C",
     default=False,
-    help="Show an histogram of the observed chunk sizes of all messages received.",
+    help="Show an histogram of the observed metric values.",
 )
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
 @click.option("--print-statistics/--no-print-statistics", "-s/-S", default=True)
@@ -309,7 +252,6 @@ def main(
     metric,
     intervals_histogram,
     values_histogram,
-    chunk_sizes_histogram,
     print_data_points,
     print_statistics,
     command,
@@ -321,19 +263,29 @@ def main(
     """
 
     command_str = " ".join(command)
-    sink = SummarySink(
+
+    subscriber = Subscriber(
+        token=token,
+        management_url=server,
+        metrics=metric,
+    )
+    subscriber.run()
+
+    asyncio.run(run_cmd(command_str))
+
+    drain = SummaryDrain(
         metrics=metric,
         token=token,
         management_url=server,
         intervals_histogram=intervals_histogram,
-        chunk_sizes_histogram=chunk_sizes_histogram,
         values_histogram=values_histogram,
         print_data=print_data_points,
         print_stats=print_statistics,
-        command=command_str,
+        queue=subscriber.queue
     )
-    sink.run()
+    drain.run()
 
+    drain.print_histograms()
 
 if __name__ == "__main__":
     main()
