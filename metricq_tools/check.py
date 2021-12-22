@@ -58,7 +58,12 @@ async def check_for_non_finite(client):
 @metricq_server_option()
 def main(server):
     """Check metrics for non-finite values."""
-    client = metricq.HistoryClient(token="tool-check", management_url=server)
+    client = metricq.HistoryClient(
+        token="tool-check",
+        management_url=server,
+        client_version=client_version,
+        add_uuid=True,
+    )
 
     asyncio.run(check_for_non_finite(client))
 
