@@ -6,7 +6,6 @@ import click_completion
 import click_log
 import metricq
 
-
 from .logging import get_root_logger
 from .utils import metricq_server_option
 from .version import version as client_version
