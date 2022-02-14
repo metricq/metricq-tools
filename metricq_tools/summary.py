@@ -29,6 +29,7 @@
 
 
 import asyncio
+from sys import exit
 
 import click
 import click_completion
@@ -37,7 +38,6 @@ import metricq
 import numpy as np
 import termplotlib as tpl
 from metricq.subscriber import Subscriber
-from sys import exit
 from tabulate import tabulate
 
 from metricq_tools.utils import metricq_server_option, metricq_token_option
@@ -161,7 +161,17 @@ class Summary:
 
         table = list[list]()
 
-        headers = ["Metric","Minimum","Maximum","Average","Median","Standard deviation","Arithmetic mean","Variance","Count"]
+        headers = [
+            "Metric",
+            "Minimum",
+            "Maximum",
+            "Average",
+            "Median",
+            "Standard deviation",
+            "Arithmetic mean",
+            "Variance",
+            "Count",
+        ]
 
         for metric in self._metrics:
             if self.values[metric]:
@@ -205,13 +215,13 @@ async def run_cmd(command):
     if stderr:
         click.echo(click.style(stderr.decode(), fg="red"))
 
-    if (proc.returncode == 0):
+    if proc.returncode == 0:
         logger.info("{!r} exited with {}", command, proc.returncode)
     else:
         logger.error("{!r} exited with {}", command, proc.returncode)
 
     return proc.returncode
-        
+
 
 async def async_main(
     server,
@@ -229,7 +239,7 @@ async def async_main(
         values_histogram=values_histogram,
         print_data=print_data_points,
         print_stats=print_statistics,
-        metrics=metric
+        metrics=metric,
     )
     async with Subscriber(
         token=token,
@@ -246,6 +256,7 @@ async def async_main(
         summary.print()
 
         return returncode
+
 
 @click.command()
 @metricq_server_option()
@@ -284,16 +295,18 @@ def main(
     network, prints a statistical overview on exit.
     """
 
-    returncode = asyncio.run(async_main(    
-        server,
-        token,
-        metric,
-        intervals_histogram,
-        values_histogram,
-        print_data_points,
-        print_statistics,
-        command
-    ))
+    returncode = asyncio.run(
+        async_main(
+            server,
+            token,
+            metric,
+            intervals_histogram,
+            values_histogram,
+            print_data_points,
+            print_statistics,
+            command,
+        )
+    )
 
     exit(returncode)
 
