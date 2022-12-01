@@ -88,10 +88,8 @@ class MetricQSpy(metricq.HistoryClient):
                             timeout=5,
                         )
                         database = await self._data_locations.get()
-                    
-                metadata = {
-                    k: v for k, v in metadata.items() if not k.startswith("_")
-                }
+
+                metadata = {k: v for k, v in metadata.items() if not k.startswith("_")}
 
                 if output_format is OutputFormat.Pretty:
                     if database:
@@ -105,16 +103,15 @@ class MetricQSpy(metricq.HistoryClient):
                     else:
                         click.echo(
                             "{metric} (not stored on any database): {metadata}".format(
-                            metric=click.style(metric, fg="cyan"),
-                            metadata=metadata,
+                                metric=click.style(metric, fg="cyan"),
+                                metadata=metadata,
+                            )
                         )
-                    )
                 elif output_format is OutputFormat.Json:
                     results[metric] = {
                         "location": database,
                         "metadata": metadata,
                     }
-
 
         if output_format is OutputFormat.Json:
             import json
