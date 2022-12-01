@@ -122,8 +122,9 @@ class MetricQSpy(metricq.HistoryClient):
 @click_log.simple_verbosity_option(logger, default="warning")
 @metricq_server_option()
 @output_format_option()
+@click.version_option(version=client_version)
 @click.argument("metrics", required=True, nargs=-1)
-def main(server, format: OutputFormat, metrics):
+def main(server, format: OutputFormat, metrics) -> None:
     """Obtain metadata and storage location for a set of metrics."""
     spy = MetricQSpy(server)
 

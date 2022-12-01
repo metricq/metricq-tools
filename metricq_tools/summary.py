@@ -37,7 +37,7 @@ import click_log
 import metricq
 import numpy as np
 import termplotlib as tpl
-from metricq.subscriber import Subscriber
+from metricq import Subscriber
 from tabulate import tabulate
 
 from metricq_tools.utils import metricq_server_option, metricq_token_option
@@ -259,8 +259,9 @@ async def async_main(
 
 
 @click.command()
+@click_log.simple_verbosity_option(logger, default="WARNING")
 @metricq_server_option()
-@metricq_token_option(default="metricq-inspect")
+@metricq_token_option(default="metricq-summary")
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",
@@ -276,9 +277,8 @@ async def async_main(
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
 @click.option("--print-statistics/--no-print-statistics", "-s/-S", default=True)
 @click.option("-m", "--metric", required=True, multiple=True)
-@click_log.simple_verbosity_option(logger, default="WARNING")
 @click.version_option(version=client_version)
-@click.argument("command", nargs=-1)
+@click.argument("command", required=True, nargs=-1)
 def main(
     server,
     token,

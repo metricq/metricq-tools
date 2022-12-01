@@ -362,7 +362,7 @@ def main(
     format: OutputFormat,
     ignore: List[IgnoredEvent],
 ):
-    """Send a RPC broadcast on the MetricQ network and wait for replies from online clients."""
+    """Send an RPC broadcast on the MetricQ network and wait for replies from online clients."""
 
     asyncio.run(
         discover(
