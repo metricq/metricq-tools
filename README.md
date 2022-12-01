@@ -3,6 +3,9 @@ MetricQ Tools
 
 ![License: GPLv3](https://img.shields.io/badge/License-GPLv3-yellow)
 [![Build](https://github.com/metricq/metricq-tools/actions/workflows/package.yml/badge.svg)](https://github.com/metricq/metricq-tools/actions/workflows/package.yml)
+![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)
+[![PyPI](https://img.shields.io/pypi/v/metricq-tools)](https://pypi.org/project/metricq-tools/)
+![PyPI - Wheel](https://img.shields.io/pypi/wheel/metricq-tools)
 
 Tools and utility scripts to monitor and administrate a MetricQ network.
 
