@@ -1,7 +1,8 @@
 MetricQ Tools
 =============
 
-[![Test, build and publish the Python package](https://github.com/metricq/metricq-tools/actions/workflows/package.yml/badge.svg)](https://github.com/metricq/metricq-tools/actions/workflows/package.yml)
+![License: GPLv3](https://img.shields.io/badge/License-GPLv3-yellow)
+[![Build](https://github.com/metricq/metricq-tools/actions/workflows/package.yml/badge.svg)](https://github.com/metricq/metricq-tools/actions/workflows/package.yml)
 
 Tools and utility scripts to monitor and administrate a MetricQ network.
 
@@ -85,6 +86,7 @@ Options:
 ```
 
 `metricq-send`
+--------------
 
 Send a single time-value pair for the given metric.
 
