@@ -39,7 +39,6 @@ from typing import IO, Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
 import aio_pika
 import async_timeout
 import click
-import click_completion
 import click_log
 import humanize
 import metricq
@@ -59,8 +58,6 @@ from .utils import (
 from .version import version as client_version
 
 logger = get_root_logger()
-
-click_completion.init()
 
 
 class IgnoredEvent(CommandLineChoice, Enum):

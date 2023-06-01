@@ -2,7 +2,6 @@ import asyncio
 import math
 
 import click
-import click_completion
 import click_log
 import metricq
 
@@ -12,7 +11,6 @@ from .version import version as client_version
 
 logger = get_root_logger()
 
-click_completion.init()
 
 
 async def check_for_non_finite(client):

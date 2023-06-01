@@ -32,7 +32,6 @@ import asyncio
 from sys import exit
 
 import click
-import click_completion
 import click_log
 import metricq
 import numpy as np
@@ -46,8 +45,6 @@ from .logging import get_root_logger
 from .version import version as client_version
 
 logger = get_root_logger()
-
-click_completion.init()
 
 
 class Summary:

@@ -33,7 +33,6 @@ from typing import Any, Dict, Optional, TypedDict
 
 import aio_pika
 import click
-import click_completion
 import click_log
 import metricq
 from metricq.types import Metric
@@ -43,8 +42,6 @@ from .utils import OutputFormat, metricq_server_option, output_format_option
 from .version import version as client_version
 
 logger = get_root_logger()
-
-click_completion.init()
 
 Database = str
 
