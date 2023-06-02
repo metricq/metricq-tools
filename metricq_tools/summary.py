@@ -42,6 +42,7 @@ from tabulate import tabulate
 from metricq_tools.utils import metricq_command
 
 from .logging import logger
+from .version import version as client_version
 
 
 class Summary:
@@ -246,6 +247,7 @@ async def async_main(
         url=server,
         metrics=metric,
         expires=3600,
+        client_version=client_version,
     ) as subscription:
         returncode = await run_cmd(command_str)
 
