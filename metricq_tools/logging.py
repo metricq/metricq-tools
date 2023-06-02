@@ -29,7 +29,7 @@
 
 import logging
 
-import click_log
+import click_log  # type: ignore
 import metricq
 
 

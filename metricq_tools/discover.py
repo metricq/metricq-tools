@@ -39,8 +39,8 @@ from typing import IO, Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
 import aio_pika
 import async_timeout
 import click
-import click_log
-import humanize
+import click_log  # type: ignore
+import humanize  # type: ignore
 import metricq
 from dateutil.parser import isoparse as parse_iso_datetime
 from dateutil.tz import tzlocal
@@ -197,9 +197,11 @@ def echo_status(status: Status, token: str, msg: str):
 
 
 class MetricQDiscover(metricq.Agent):
-    def __init__(self, server):
+    _response_queue: Queue[Tuple[str, dict]]
+
+    def __init__(self, server) -> None:
         super().__init__("discover", server, add_uuid=True)
-        self._response_queue: Queue[Tuple[str, dict]] = Queue()
+        self._response_queue = Queue()
 
     async def discover(
         self,
@@ -208,6 +210,7 @@ class MetricQDiscover(metricq.Agent):
         await self.connect()
         await self.rpc_consume()
 
+        assert self._management_channel is not None
         self._management_broadcast_exchange = (
             await self._management_channel.declare_exchange(
                 name=self._management_broadcast_exchange_name,
@@ -316,7 +319,6 @@ async def discover(
             return
 
         if format is OutputFormat.Json:
-
             responses = {
                 from_token: response async for (from_token, response) in responses
             }

@@ -33,7 +33,7 @@ from typing import Any, Dict, Optional, TypedDict
 
 import aio_pika
 import click
-import click_log
+import click_log  # type: ignore
 import metricq
 from metricq.types import Metric
 

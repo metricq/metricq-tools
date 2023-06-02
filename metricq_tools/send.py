@@ -28,7 +28,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import click
-import click_log
+import click_log  # type: ignore
 from metricq import Source, Timestamp
 from metricq.types import Metric
 

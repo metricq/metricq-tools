@@ -30,12 +30,13 @@
 
 import asyncio
 from sys import exit
+from typing import Optional
 
 import click
-import click_log
+import click_log  # type: ignore
 import metricq
 import numpy as np
-import termplotlib as tpl
+import termplotlib as tpl  # type: ignore
 from metricq import Subscriber
 from tabulate import tabulate
 
@@ -48,6 +49,11 @@ logger = get_root_logger()
 
 
 class Summary:
+    timestamps: dict[str, list[float]]
+    last_timestamp: dict[str, Optional[float]]
+    intervals: dict[str, list[float]]
+    values: dict[str, list[float]]
+
     def __init__(
         self,
         metrics: list[str],
@@ -63,24 +69,24 @@ class Summary:
         self.print_stats = print_stats
         self.print_data = print_data
 
-        self.timestamps = dict[str, list]()
-        self.last_timestamp = dict[str]()
-        self.intervals = dict[str, list]()
-        self.values = dict[str, list]()
+        self.timestamps = {}
+        self.last_timestamp = {}
+        self.intervals = {}
+        self.values = {}
 
         for metric in metrics:
-            self.timestamps[metric] = list()
+            self.timestamps[metric] = []
             self.last_timestamp[metric] = None
-            self.intervals[metric] = list()
-            self.values[metric] = list()
+            self.intervals[metric] = []
+            self.values[metric] = []
 
     async def add_data(self, metric: str, timestamp: metricq.Timestamp, value: float):
         if self.print_data:
             click.echo(click.style("{}: {}".format(timestamp, value), fg="bright_blue"))
 
         self.timestamps[metric].append(timestamp.posix)
-        if self.last_timestamp[metric]:
-            self.intervals[metric].append(timestamp.posix - self.last_timestamp[metric])
+        if (last_timestamp := self.last_timestamp[metric]) is not None:
+            self.intervals[metric].append(timestamp.posix - last_timestamp)
         self.last_timestamp[metric] = timestamp.posix
         self.values[metric].append(value)
 
@@ -126,7 +132,6 @@ class Summary:
 
     def print(self):
         for metric in self._metrics:
-
             if self.values[metric]:
                 click.echo()
                 click.echo(click.style(f"Statistics of metric {metric!r}:", fg="green"))
@@ -243,7 +248,6 @@ async def async_main(
         management_url=server,
         metrics=metric,
     ) as subscription:
-
         returncode = await run_cmd(command_str)
 
         async with subscription.drain() as drain:

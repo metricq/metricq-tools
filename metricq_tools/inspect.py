@@ -28,13 +28,14 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from contextlib import suppress
+from typing import Optional
 
 import aio_pika
 import click
-import click_log
+import click_log  # type: ignore
 import metricq
 import numpy as np
-import termplotlib as tpl
+import termplotlib as tpl  # type: ignore
 from metricq.datachunk_pb2 import DataChunk
 
 from metricq_tools.utils import metricq_server_option, metricq_token_option
@@ -46,6 +47,13 @@ logger = get_root_logger()
 
 
 class InspectSink(metricq.Sink):
+    tokens: dict[Optional[str], int]
+    timestamps: list[float]
+    last_timestamp: Optional[float]
+    intervals: list[float]
+    values: list[float]
+    chunk_sizes: list[int]
+
     def __init__(
         self,
         metric: str,
@@ -88,7 +96,8 @@ class InspectSink(metricq.Sink):
             body = message.body
             from_token = None
             with suppress(AttributeError):
-                from_token = message.client_id
+                # This probably doesn't ever work, but I'm just fixing the typing now, so I have to ignore
+                from_token = message.client_id  # type: ignore[attr-defined]
             metric = message.routing_key
 
             if from_token not in self.tokens:
