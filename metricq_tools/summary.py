@@ -30,7 +30,7 @@
 
 import asyncio
 from sys import exit
-from typing import Optional
+from typing import Any, Optional
 
 import click
 import click_log  # type: ignore
@@ -80,7 +80,9 @@ class Summary:
             self.intervals[metric] = []
             self.values[metric] = []
 
-    async def add_data(self, metric: str, timestamp: metricq.Timestamp, value: float):
+    async def add_data(
+        self, metric: str, timestamp: metricq.Timestamp, value: float
+    ) -> None:
         if self.print_data:
             click.echo(click.style("{}: {}".format(timestamp, value), fg="bright_blue"))
 
@@ -90,7 +92,7 @@ class Summary:
         self.last_timestamp[metric] = timestamp.posix
         self.values[metric].append(value)
 
-    def _print_histogram(self, values):
+    def _print_histogram(self, values: list[float]) -> None:
         counts, bin_edges = np.histogram(values, bins="doane")
         fig = tpl.figure()
         labels = [
@@ -105,7 +107,7 @@ class Summary:
         fig.barh(counts, labels=labels)
         fig.show()
 
-    def _print_intervals_histogram(self, intervals):
+    def _print_intervals_histogram(self, intervals: list[float]) -> None:
         click.echo(
             click.style(
                 "Distribution of the duration between consecutive data points in seconds",
@@ -119,7 +121,7 @@ class Summary:
         click.echo()
         click.echo()
 
-    def _print_values_histogram(self, values):
+    def _print_values_histogram(self, values: list[float]) -> None:
         click.echo(
             click.style("Distribution of the values of the data points", fg="yellow")
         )
@@ -130,7 +132,7 @@ class Summary:
         click.echo()
         click.echo()
 
-    def print(self):
+    def print(self) -> None:
         for metric in self._metrics:
             if self.values[metric]:
                 click.echo()
@@ -152,7 +154,7 @@ class Summary:
         if self.print_stats:
             self._print_statistics()
 
-    def _print_statistics(self):
+    def _print_statistics(self) -> None:
         click.echo(
             click.style(
                 "Statistics",
@@ -161,7 +163,7 @@ class Summary:
         )
         click.echo()
 
-        table = list[list]()
+        table = list[list[Any]]()
 
         headers = [
             "Metric",
@@ -203,7 +205,7 @@ class Summary:
         click.echo()
 
 
-async def run_cmd(command):
+async def run_cmd(command: str) -> Optional[int]:
     logger.debug("Running command: {!r}", command)
 
     proc = await asyncio.create_subprocess_shell(
@@ -226,15 +228,15 @@ async def run_cmd(command):
 
 
 async def async_main(
-    server,
-    token,
-    metric,
-    intervals_histogram,
-    values_histogram,
-    print_data_points,
-    print_statistics,
-    command,
-):
+    server: str,
+    token: str,
+    metric: list[str],
+    intervals_histogram: bool,
+    values_histogram: bool,
+    print_data_points: bool,
+    print_statistics: bool,
+    command: str,
+) -> None:
     command_str = " ".join(command)
     summary = Summary(
         intervals_histogram=intervals_histogram,
@@ -247,6 +249,7 @@ async def async_main(
         token=token,
         url=server,
         metrics=metric,
+        expires=3600,
     ) as subscription:
         returncode = await run_cmd(command_str)
 
@@ -281,15 +284,15 @@ async def async_main(
 @click.version_option(version=client_version)
 @click.argument("command", required=True, nargs=-1)
 def main(
-    server,
-    token,
-    metric,
-    intervals_histogram,
-    values_histogram,
-    print_data_points,
-    print_statistics,
-    command,
-):
+    server: str,
+    token: str,
+    metric: list[str],
+    intervals_histogram: bool,
+    values_histogram: bool,
+    print_data_points: bool,
+    print_statistics: bool,
+    command: str,
+) -> None:
     """Live metric data analysis and inspection on the MetricQ network.
 
     Consumes new data points for the given metric as they are submitted to the
