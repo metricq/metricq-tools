@@ -29,8 +29,7 @@
 
 import click
 import click_log  # type: ignore
-from metricq import Source, Timestamp
-from metricq.types import Metric
+from metricq import Metric, Source, Timestamp
 
 from metricq_tools.utils import TIMESTAMP, metricq_server_option, metricq_token_option
 
@@ -70,7 +69,7 @@ def main(server: str, token: str, timestamp: Timestamp, metric: Metric, value: f
     """Send a single time-value pair for the given metric."""
     send = MetricQSend(
         token=token,
-        management_url=server,
+        url=server,
         metric=metric,
         timestamp=timestamp,
         value=value,

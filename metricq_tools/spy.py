@@ -35,7 +35,7 @@ import aio_pika
 import click
 import click_log  # type: ignore
 import metricq
-from metricq.types import Metric
+from metricq import Metric
 
 from .logging import get_root_logger
 from .utils import OutputFormat, metricq_server_option, output_format_option
@@ -116,8 +116,12 @@ class MetricQSpy(metricq.HistoryClient):
             click.echo(json.dumps(results, sort_keys=True, indent=None))
         await self.stop()
 
-    async def _on_history_response(self, message: aio_pika.IncomingMessage) -> None:
+    async def _on_history_response(
+        self, message: aio_pika.abc.AbstractIncomingMessage
+    ) -> None:
         database = message.app_id
+        if database is None:
+            database = "(unknown)"
         assert self._data_locations
         self._data_locations.put_nowait(database)
 

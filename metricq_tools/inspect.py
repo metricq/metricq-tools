@@ -91,7 +91,7 @@ class InspectSink(metricq.Sink):
             )
         )
 
-    async def _on_data_message(self, message: aio_pika.IncomingMessage):
+    async def _on_data_message(self, message: aio_pika.abc.AbstractIncomingMessage):
         async with message.process(requeue=True):
             body = message.body
             from_token = None
@@ -99,6 +99,11 @@ class InspectSink(metricq.Sink):
                 # This probably doesn't ever work, but I'm just fixing the typing now, so I have to ignore
                 from_token = message.client_id  # type: ignore[attr-defined]
             metric = message.routing_key
+            if metric is None:
+                logger.warning(
+                    "received data message without routing key from {}", from_token
+                )
+                return
 
             if from_token not in self.tokens:
                 self.tokens[from_token] = 0
@@ -250,7 +255,7 @@ def main(
     sink = InspectSink(
         metric=metric,
         token=token,
-        management_url=server,
+        url=server,
         intervals_histogram=intervals_histogram,
         chunk_sizes_histogram=chunk_sizes_histogram,
         values_histogram=values_histogram,

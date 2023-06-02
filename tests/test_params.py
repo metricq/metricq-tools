@@ -3,7 +3,7 @@ from typing import Union
 
 import pytest
 from click import ParamType
-from metricq.types import Timedelta, Timestamp
+from metricq import Timedelta, Timestamp
 
 from metricq_tools.utils import (
     TIMESTAMP,

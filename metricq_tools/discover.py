@@ -44,7 +44,7 @@ import humanize  # type: ignore
 import metricq
 from dateutil.parser import isoparse as parse_iso_datetime
 from dateutil.tz import tzlocal
-from metricq.types import Timedelta
+from metricq import Timedelta
 
 from .logging import get_root_logger
 from .utils import (

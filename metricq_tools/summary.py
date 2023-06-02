@@ -245,7 +245,7 @@ async def async_main(
     )
     async with Subscriber(
         token=token,
-        management_url=server,
+        url=server,
         metrics=metric,
     ) as subscription:
         returncode = await run_cmd(command_str)

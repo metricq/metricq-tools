@@ -3,7 +3,7 @@ from enum import Enum, auto
 from typing import Any, Generic, List, Optional, Type, TypeVar, Union
 
 from click import Context, Parameter, ParamType, option
-from metricq.types import Timedelta, Timestamp
+from metricq import Timedelta, Timestamp
 
 _C = TypeVar("_C", covariant=True)
 

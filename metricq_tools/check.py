@@ -56,7 +56,7 @@ def main(server):
     """Check metrics for non-finite values."""
     client = metricq.HistoryClient(
         token="tool-check",
-        management_url=server,
+        url=server,
         client_version=client_version,
         add_uuid=True,
     )
