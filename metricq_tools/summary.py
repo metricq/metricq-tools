@@ -160,8 +160,6 @@ class Summary:
         )
         click.echo()
 
-        table = list[list[Any]]()
-
         headers = [
             "Metric",
             "Minimum",
@@ -173,6 +171,8 @@ class Summary:
             "Variance",
             "Count",
         ]
+
+        table: list[list[Any]] = [[] for _ in headers]
 
         for metric in self._metrics:
             if self.values[metric]:
