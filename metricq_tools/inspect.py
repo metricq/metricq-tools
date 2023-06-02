@@ -32,18 +32,15 @@ from typing import Any, Optional
 
 import aio_pika
 import click
-import click_log  # type: ignore
 import metricq
 import numpy as np
 import termplotlib as tpl  # type: ignore
 from metricq.datachunk_pb2 import DataChunk
 
-from metricq_tools.utils import metricq_server_option, metricq_token_option
+from metricq_tools.utils import metricq_command
 
-from .logging import get_root_logger
+from .logging import logger
 from .version import version as client_version
-
-logger = get_root_logger()
 
 
 class InspectSink(metricq.Sink):
@@ -217,9 +214,7 @@ class InspectSink(metricq.Sink):
             self.print_values_histogram()
 
 
-@click.command()
-@metricq_server_option()
-@metricq_token_option(default="metricq-inspect")
+@metricq_command(default_token="agent-tool-inspect")
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",
@@ -240,8 +235,6 @@ class InspectSink(metricq.Sink):
 )
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
 @click.argument("metric", required=True, nargs=1)
-@click_log.simple_verbosity_option(logger, default="WARNING")  # type: ignore
-@click.version_option(version=client_version)
 def main(
     server: str,
     token: str,

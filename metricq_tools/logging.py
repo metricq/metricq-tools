@@ -42,3 +42,6 @@ def get_root_logger() -> logging.Logger:
     # )
 
     return logger
+
+
+logger = get_root_logger()

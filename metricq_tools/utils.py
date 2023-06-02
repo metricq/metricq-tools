@@ -3,8 +3,12 @@ from enum import Enum, auto
 from typing import Any, Callable, Generic, List, Optional, Type, TypeVar, Union, cast
 
 import click
+import click_log  # type: ignore
 from click import Context, Parameter, ParamType, option
 from metricq import Timedelta, Timestamp
+
+from .logging import logger
+from .version import version as client_version
 
 _C = TypeVar("_C", covariant=True)
 
@@ -165,3 +169,20 @@ def metricq_token_option(default: str) -> Callable[[FC], FC]:
         show_default=True,
         help="A token to identify this client on the MetricQ network.",
     )
+
+
+def metricq_command(default_token: str) -> Callable[[FC], click.Command]:
+    log_decorator = cast(
+        Callable[[FC], FC], click_log.simple_verbosity_option(logger, default="warning")
+    )
+
+    def decorator(func: FC) -> click.Command:
+        return click.version_option(version=client_version)(
+            log_decorator(
+                metricq_token_option(default_token)(
+                    metricq_server_option()(click.command()(func))
+                )
+            )
+        )
+
+    return decorator

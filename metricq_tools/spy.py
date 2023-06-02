@@ -33,15 +33,11 @@ from typing import Any, Dict, Optional, TypedDict
 
 import aio_pika
 import click
-import click_log  # type: ignore
 import metricq
 from metricq import Metric
 
-from .logging import get_root_logger
-from .utils import OutputFormat, metricq_server_option, output_format_option
+from .utils import OutputFormat, metricq_command, output_format_option
 from .version import version as client_version
-
-logger = get_root_logger()
 
 Database = str
 
@@ -52,8 +48,10 @@ class SpyResults(TypedDict):
 
 
 class MetricQSpy(metricq.HistoryClient):
-    def __init__(self, server: str) -> None:
-        super().__init__("spy", server, client_version=client_version, add_uuid=True)
+    def __init__(self, token: str, url: str) -> None:
+        super().__init__(
+            token=token, url=url, client_version=client_version, add_uuid=True
+        )
         self._data_locations: Optional[asyncio.Queue[Database]] = None
 
     async def spy(self, patterns: list[str], *, output_format: OutputFormat) -> None:
@@ -128,15 +126,12 @@ class MetricQSpy(metricq.HistoryClient):
         await super()._on_history_response(message)
 
 
-@click.command()
-@click_log.simple_verbosity_option(logger, default="warning")  # type: ignore
-@metricq_server_option()
+@metricq_command(default_token="agent-tool-spy")
 @output_format_option()
-@click.version_option(version=client_version)
 @click.argument("metrics", required=True, nargs=-1)
-def main(server: str, format: OutputFormat, metrics: list[str]) -> None:
+def main(server: str, token: str, format: OutputFormat, metrics: list[str]) -> None:
     """Obtain metadata and storage location for a set of metrics."""
-    spy = MetricQSpy(server)
+    spy = MetricQSpy(token=token, url=server)
 
     asyncio.run(spy.spy(metrics, output_format=format))
 

@@ -33,19 +33,15 @@ from sys import exit
 from typing import Any, Optional
 
 import click
-import click_log  # type: ignore
 import metricq
 import numpy as np
 import termplotlib as tpl  # type: ignore
 from metricq import Subscriber
 from tabulate import tabulate
 
-from metricq_tools.utils import metricq_server_option, metricq_token_option
+from metricq_tools.utils import metricq_command
 
-from .logging import get_root_logger
-from .version import version as client_version
-
-logger = get_root_logger()
+from .logging import logger
 
 
 class Summary:
@@ -262,10 +258,7 @@ async def async_main(
         return returncode
 
 
-@click.command()
-@click_log.simple_verbosity_option(logger, default="WARNING")  # type: ignore
-@metricq_server_option()
-@metricq_token_option(default="metricq-summary")
+@metricq_command(default_token="sink-tool-summary")
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",
@@ -281,7 +274,6 @@ async def async_main(
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
 @click.option("--print-statistics/--no-print-statistics", "-s/-S", default=True)
 @click.option("-m", "--metric", required=True, multiple=True)
-@click.version_option(version=client_version)
 @click.argument("command", required=True, nargs=-1)
 def main(
     server: str,

@@ -29,15 +29,11 @@
 from typing import Any
 
 import click
-import click_log  # type: ignore
 from metricq import Metric, Source, Timestamp
 
-from metricq_tools.utils import TIMESTAMP, metricq_server_option, metricq_token_option
+from metricq_tools.utils import TIMESTAMP, metricq_command
 
-from .logging import get_root_logger
 from .version import version as client_version
-
-logger = get_root_logger()
 
 
 class MetricQSend(Source):
@@ -54,11 +50,7 @@ class MetricQSend(Source):
         await self.stop()
 
 
-@click.command()
-@click_log.simple_verbosity_option(logger, default="warning")  # type: ignore
-@click.version_option(version=client_version)
-@metricq_server_option()
-@metricq_token_option(default="source-send")
+@metricq_command(default_token="source-tool-send")
 @click.option(
     "--timestamp",
     type=TIMESTAMP,

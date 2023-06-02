@@ -50,25 +50,21 @@ from typing import (
 import aio_pika
 import async_timeout
 import click
-import click_log  # type: ignore
 import humanize  # type: ignore
 import metricq
 from dateutil.parser import isoparse as parse_iso_datetime
 from dateutil.tz import tzlocal
 from metricq import Timedelta
 
-from .logging import get_root_logger
+from .logging import logger
 from .utils import (
     ChoiceParam,
     CommandLineChoice,
     DurationParam,
     OutputFormat,
-    metricq_server_option,
+    metricq_command,
     output_format_option,
 )
-from .version import version as client_version
-
-logger = get_root_logger()
 
 
 class IgnoredEvent(CommandLineChoice, Enum):
@@ -210,8 +206,8 @@ def echo_status(status: Status, token: str, msg: str) -> None:
 class MetricQDiscover(metricq.Agent):
     _response_queue: Queue[Tuple[str, dict[str, Any]]]
 
-    def __init__(self, server: str) -> None:
-        super().__init__("discover", server, add_uuid=True)
+    def __init__(self, token: str, server: str) -> None:
+        super().__init__(token=token, url=server, add_uuid=True)
         self._response_queue = Queue()
 
     async def discover(
@@ -311,13 +307,15 @@ async def stopping(client: MetricQDiscover) -> AsyncIterator[MetricQDiscover]:
 
 
 async def discover(
+    *,
+    token: str,
     server: str,
     diff: Optional[IO[str]],
     timeout: Optional[Timedelta],
     ignored_events: Set[IgnoredEvent],
     format: OutputFormat,
 ) -> None:
-    async with stopping(MetricQDiscover(server)) as discoverer:
+    async with stopping(MetricQDiscover(token=token, server=server)) as discoverer:
         responses = await discoverer.discover(timeout=timeout)
 
         if diff:
@@ -345,9 +343,7 @@ async def discover(
                     echo_status(Status.Error, from_token, str(response))
 
 
-@click.command()
-@click.version_option(version=client_version)
-@metricq_server_option()
+@metricq_command(default_token="agent-tool-discover")
 @click.option(
     "-d",
     "--diff",
@@ -364,18 +360,19 @@ async def discover(
 )
 @output_format_option()
 @click.option("--ignore", type=IGNORED_EVENT, multiple=True, help="Messages to ignore.")
-@click_log.simple_verbosity_option(logger, default="warning")  # type: ignore
 def main(
     server: str,
+    token: str,
     diff: Optional[IO[str]],
     timeout: Optional[Timedelta],
     format: OutputFormat,
     ignore: List[IgnoredEvent],
-):
+) -> None:
     """Send an RPC broadcast on the MetricQ network and wait for replies from online clients."""
 
     asyncio.run(
         discover(
+            token=token,
             server=server,
             diff=diff,
             timeout=timeout,
