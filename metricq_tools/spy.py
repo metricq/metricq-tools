@@ -52,11 +52,11 @@ class SpyResults(TypedDict):
 
 
 class MetricQSpy(metricq.HistoryClient):
-    def __init__(self, server) -> None:
+    def __init__(self, server: str) -> None:
         super().__init__("spy", server, client_version=client_version, add_uuid=True)
         self._data_locations: Optional[asyncio.Queue[Database]] = None
 
-    async def spy(self, patterns, *, output_format: OutputFormat) -> None:
+    async def spy(self, patterns: list[str], *, output_format: OutputFormat) -> None:
         self._data_locations = asyncio.Queue()
         await self.connect()
 
@@ -67,7 +67,7 @@ class MetricQSpy(metricq.HistoryClient):
                 selector=pattern,
                 metadata=True,
                 historic=None,
-            )  # type: ignore # This is a bug in the type annotations for get_metrics
+            )
 
             assert isinstance(result, dict), "No metadata in result of get_metrics"
 
@@ -129,12 +129,12 @@ class MetricQSpy(metricq.HistoryClient):
 
 
 @click.command()
-@click_log.simple_verbosity_option(logger, default="warning")
+@click_log.simple_verbosity_option(logger, default="warning")  # type: ignore
 @metricq_server_option()
 @output_format_option()
 @click.version_option(version=client_version)
 @click.argument("metrics", required=True, nargs=-1)
-def main(server, format: OutputFormat, metrics) -> None:
+def main(server: str, format: OutputFormat, metrics: list[str]) -> None:
     """Obtain metadata and storage location for a set of metrics."""
     spy = MetricQSpy(server)
 

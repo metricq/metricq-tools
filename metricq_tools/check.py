@@ -12,7 +12,7 @@ from .version import version as client_version
 logger = get_root_logger()
 
 
-async def check_for_non_finite(client):
+async def check_for_non_finite(client: metricq.HistoryClient) -> None:
     logger.info("Connecting...")
     await client.connect()
 
@@ -21,7 +21,7 @@ async def check_for_non_finite(client):
 
     bad_metrics = {}
 
-    async def check_metric(metric):
+    async def check_metric(metric: str) -> None:
         try:
             result = await client.history_aggregate(
                 metric, start_time=start_time, end_time=end_time
@@ -50,9 +50,9 @@ async def check_for_non_finite(client):
 
 
 @click.command()
-@click_log.simple_verbosity_option(logger, default="warning")
+@click_log.simple_verbosity_option(logger, default="warning")  # type: ignore
 @metricq_server_option()
-def main(server):
+def main(server: str) -> None:
     """Check metrics for non-finite values."""
     client = metricq.HistoryClient(
         token="tool-check",

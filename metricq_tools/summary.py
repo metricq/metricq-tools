@@ -236,7 +236,7 @@ async def async_main(
     print_data_points: bool,
     print_statistics: bool,
     command: str,
-) -> None:
+) -> Optional[int]:
     command_str = " ".join(command)
     summary = Summary(
         intervals_histogram=intervals_histogram,
@@ -254,8 +254,8 @@ async def async_main(
         returncode = await run_cmd(command_str)
 
         async with subscription.drain() as drain:
-            async for metric, timestamp, value in drain:
-                await summary.add_data(metric, timestamp, value)
+            async for m, timestamp, value in drain:
+                await summary.add_data(m, timestamp, value)
 
         summary.print()
 
@@ -263,7 +263,7 @@ async def async_main(
 
 
 @click.command()
-@click_log.simple_verbosity_option(logger, default="WARNING")
+@click_log.simple_verbosity_option(logger, default="WARNING")  # type: ignore
 @metricq_server_option()
 @metricq_token_option(default="metricq-summary")
 @click.option(

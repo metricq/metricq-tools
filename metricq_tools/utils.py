@@ -1,7 +1,8 @@
 import re
 from enum import Enum, auto
-from typing import Any, Generic, List, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Generic, List, Optional, Type, TypeVar, Union, cast
 
+import click
 from click import Context, Parameter, ParamType, option
 from metricq import Timedelta, Timestamp
 
@@ -35,7 +36,7 @@ class CommandLineChoice:
     @classmethod
     def from_choice(cls: Type[_C], option: str) -> _C:
         member_name = kebabcase_to_camelcase(option.lower())
-        return getattr(cls, "__members__")[member_name]
+        return cast(_C, getattr(cls, "__members__")[member_name])
 
 
 ChoiceType = TypeVar("ChoiceType", bound=CommandLineChoice)
@@ -76,14 +77,16 @@ class OutputFormat(CommandLineChoice, Enum):
     Json = auto()
 
     @classmethod
-    def default(cls):
+    def default(cls) -> "OutputFormat":
         return OutputFormat.Pretty
 
 
 FORMAT = ChoiceParam(OutputFormat, "format")
 
+FC = TypeVar("FC", bound=Union[Callable[..., Any], click.Command])
 
-def output_format_option():
+
+def output_format_option() -> Callable[[FC], FC]:
     return option(
         "--format",
         type=FORMAT,
@@ -144,7 +147,7 @@ class TimestampParam(ParamType):
 TIMESTAMP = TimestampParam()
 
 
-def metricq_server_option():
+def metricq_server_option() -> Callable[[FC], FC]:
     return option(
         "--server",
         metavar="URL",
@@ -154,7 +157,7 @@ def metricq_server_option():
     )
 
 
-def metricq_token_option(default: str):
+def metricq_token_option(default: str) -> Callable[[FC], FC]:
     return option(
         "--token",
         metavar="CLIENT_TOKEN",
