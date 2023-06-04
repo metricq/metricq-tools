@@ -26,40 +26,31 @@
 # LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+from typing import Any
 
 import click
-import click_completion
-import click_log
-from metricq import Source, Timestamp
-from metricq.types import Metric
+from metricq import Metric, Source, Timestamp
 
-from metricq_tools.utils import TIMESTAMP, metricq_server_option, metricq_token_option
+from metricq_tools.utils import TIMESTAMP, metricq_command
 
-from .logging import get_root_logger
 from .version import version as client_version
-
-logger = get_root_logger()
-
-click_completion.init()
 
 
 class MetricQSend(Source):
-    def __init__(self, metric, timestamp, value, *args, **kwargs):
+    def __init__(
+        self, metric: str, timestamp: Timestamp, value: float, *args: Any, **kwargs: Any
+    ):
         super().__init__(*args, client_version=client_version, **kwargs)
         self.metric = metric
         self.timestamp = timestamp
         self.value = value
 
-    async def task(self):
+    async def task(self) -> None:
         await self.send(self.metric, time=self.timestamp, value=self.value)
         await self.stop()
 
 
-@click.command()
-@click_log.simple_verbosity_option(logger, default="warning")
-@click.version_option(version=client_version)
-@metricq_server_option()
-@metricq_token_option(default="source-send")
+@metricq_command(default_token="source-tool-send")
 @click.option(
     "--timestamp",
     type=TIMESTAMP,
@@ -69,11 +60,13 @@ class MetricQSend(Source):
 )
 @click.argument("metric", required=True)
 @click.argument("value", required=True, type=float)
-def main(server: str, token: str, timestamp: Timestamp, metric: Metric, value: float):
+def main(
+    server: str, token: str, timestamp: Timestamp, metric: Metric, value: float
+) -> None:
     """Send a single time-value pair for the given metric."""
     send = MetricQSend(
         token=token,
-        management_url=server,
+        url=server,
         metric=metric,
         timestamp=timestamp,
         value=value,

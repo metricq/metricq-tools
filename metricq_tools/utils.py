@@ -1,9 +1,14 @@
 import re
 from enum import Enum, auto
-from typing import Any, Generic, List, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Generic, List, Optional, Type, TypeVar, Union, cast
 
+import click
+import click_log  # type: ignore
 from click import Context, Parameter, ParamType, option
-from metricq.types import Timedelta, Timestamp
+from metricq import Timedelta, Timestamp
+
+from .logging import logger
+from .version import version as client_version
 
 _C = TypeVar("_C", covariant=True)
 
@@ -35,7 +40,7 @@ class CommandLineChoice:
     @classmethod
     def from_choice(cls: Type[_C], option: str) -> _C:
         member_name = kebabcase_to_camelcase(option.lower())
-        return getattr(cls, "__members__")[member_name]
+        return cast(_C, getattr(cls, "__members__")[member_name])
 
 
 ChoiceType = TypeVar("ChoiceType", bound=CommandLineChoice)
@@ -76,14 +81,16 @@ class OutputFormat(CommandLineChoice, Enum):
     Json = auto()
 
     @classmethod
-    def default(cls):
+    def default(cls) -> "OutputFormat":
         return OutputFormat.Pretty
 
 
 FORMAT = ChoiceParam(OutputFormat, "format")
 
+FC = TypeVar("FC", bound=Union[Callable[..., Any], click.Command])
 
-def output_format_option():
+
+def output_format_option() -> Callable[[FC], FC]:
     return option(
         "--format",
         type=FORMAT,
@@ -144,7 +151,7 @@ class TimestampParam(ParamType):
 TIMESTAMP = TimestampParam()
 
 
-def metricq_server_option():
+def metricq_server_option() -> Callable[[FC], FC]:
     return option(
         "--server",
         metavar="URL",
@@ -154,7 +161,7 @@ def metricq_server_option():
     )
 
 
-def metricq_token_option(default: str):
+def metricq_token_option(default: str) -> Callable[[FC], FC]:
     return option(
         "--token",
         metavar="CLIENT_TOKEN",
@@ -162,3 +169,20 @@ def metricq_token_option(default: str):
         show_default=True,
         help="A token to identify this client on the MetricQ network.",
     )
+
+
+def metricq_command(default_token: str) -> Callable[[FC], click.Command]:
+    log_decorator = cast(
+        Callable[[FC], FC], click_log.simple_verbosity_option(logger, default="warning")
+    )
+
+    def decorator(func: FC) -> click.Command:
+        return click.version_option(version=client_version)(
+            log_decorator(
+                metricq_token_option(default_token)(
+                    metricq_server_option()(click.command()(func))
+                )
+            )
+        )
+
+    return decorator

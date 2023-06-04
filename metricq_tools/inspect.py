@@ -28,27 +28,29 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from contextlib import suppress
+from typing import Any, Optional
 
 import aio_pika
 import click
-import click_completion
-import click_log
 import metricq
 import numpy as np
-import termplotlib as tpl
+import termplotlib as tpl  # type: ignore
 from metricq.datachunk_pb2 import DataChunk
 
-from metricq_tools.utils import metricq_server_option, metricq_token_option
+from metricq_tools.utils import metricq_command
 
-from .logging import get_root_logger
+from .logging import logger
 from .version import version as client_version
-
-logger = get_root_logger()
-
-click_completion.init()
 
 
 class InspectSink(metricq.Sink):
+    tokens: dict[Optional[str], int]
+    timestamps: list[float]
+    last_timestamp: Optional[float]
+    intervals: list[float]
+    values: list[float]
+    chunk_sizes: list[int]
+
     def __init__(
         self,
         metric: str,
@@ -56,8 +58,8 @@ class InspectSink(metricq.Sink):
         chunk_sizes_histogram: bool,
         values_histogram: bool,
         print_data: bool,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ):
         self._metric = metric
         self.tokens = {}
@@ -74,7 +76,7 @@ class InspectSink(metricq.Sink):
         self.chunk_sizes = []
         super().__init__(*args, client_version=client_version, **kwargs)
 
-    async def connect(self):
+    async def connect(self) -> None:
         await super().connect()
 
         await self.subscribe([self._metric])
@@ -86,13 +88,21 @@ class InspectSink(metricq.Sink):
             )
         )
 
-    async def _on_data_message(self, message: aio_pika.IncomingMessage):
+    async def _on_data_message(
+        self, message: aio_pika.abc.AbstractIncomingMessage
+    ) -> None:
         async with message.process(requeue=True):
             body = message.body
             from_token = None
             with suppress(AttributeError):
-                from_token = message.client_id
+                # This probably doesn't ever work, but I'm just fixing the typing now, so I have to ignore
+                from_token = message.client_id  # type: ignore[attr-defined]
             metric = message.routing_key
+            if metric is None:
+                logger.warning(
+                    "received data message without routing key from {}", from_token
+                )
+                return
 
             if from_token not in self.tokens:
                 self.tokens[from_token] = 0
@@ -106,7 +116,9 @@ class InspectSink(metricq.Sink):
 
             await self._on_data_chunk(metric, data_response)
 
-    async def on_data(self, metric: str, timestamp: metricq.Timestamp, value: float):
+    async def on_data(
+        self, metric: str, timestamp: metricq.Timestamp, value: float
+    ) -> None:
         if self.print_data:
             click.echo(click.style("{}: {}".format(timestamp, value), fg="bright_blue"))
 
@@ -116,7 +128,7 @@ class InspectSink(metricq.Sink):
         self.last_timestamp = timestamp.posix
         self.values.append(value)
 
-    def on_signal(self, signal):
+    def on_signal(self, signal: str) -> None:
         try:
             click.echo()
             click.echo(
@@ -140,7 +152,7 @@ class InspectSink(metricq.Sink):
         finally:
             super().on_signal(signal)
 
-    def print_histogram(self, values):
+    def print_histogram(self, values: list[float] | list[int]) -> None:
         counts, bin_edges = np.histogram(values, bins="doane")
         fig = tpl.figure()
         labels = [
@@ -155,7 +167,7 @@ class InspectSink(metricq.Sink):
         fig.barh(counts, labels=labels)
         fig.show()
 
-    def print_chunk_sizes_histogram(self):
+    def print_chunk_sizes_histogram(self) -> None:
         click.echo(
             click.style(
                 "Distribution of the chunk sizes",
@@ -169,7 +181,7 @@ class InspectSink(metricq.Sink):
         click.echo()
         click.echo()
 
-    def print_intervals_histogram(self):
+    def print_intervals_histogram(self) -> None:
         click.echo(
             click.style(
                 "Distribution of the duration between consecutive data points in seconds",
@@ -183,7 +195,7 @@ class InspectSink(metricq.Sink):
         click.echo()
         click.echo()
 
-    def print_values_histogram(self):
+    def print_values_histogram(self) -> None:
         click.echo(
             click.style("Distribution of the values of the data points", fg="yellow")
         )
@@ -191,7 +203,7 @@ class InspectSink(metricq.Sink):
 
         self.print_histogram(self.values)
 
-    def print_histograms(self):
+    def print_histograms(self) -> None:
         if self.print_chunk_sizes:
             self.print_chunk_sizes_histogram()
 
@@ -202,9 +214,7 @@ class InspectSink(metricq.Sink):
             self.print_values_histogram()
 
 
-@click.command()
-@metricq_server_option()
-@metricq_token_option(default="metricq-inspect")
+@metricq_command(default_token="agent-tool-inspect")
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",
@@ -225,17 +235,15 @@ class InspectSink(metricq.Sink):
 )
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
 @click.argument("metric", required=True, nargs=1)
-@click_log.simple_verbosity_option(logger, default="WARNING")
-@click.version_option(version=client_version)
 def main(
-    server,
-    token,
-    metric,
-    intervals_histogram,
-    values_histogram,
-    chunk_sizes_histogram,
-    print_data_points,
-):
+    server: str,
+    token: str,
+    metric: str,
+    intervals_histogram: bool,
+    values_histogram: bool,
+    chunk_sizes_histogram: bool,
+    print_data_points: bool,
+) -> None:
     """Live metric data analysis and inspection on the MetricQ network.
 
     Consumes new data points for the given metric as they are submitted to the
@@ -244,7 +252,7 @@ def main(
     sink = InspectSink(
         metric=metric,
         token=token,
-        management_url=server,
+        url=server,
         intervals_histogram=intervals_histogram,
         chunk_sizes_histogram=chunk_sizes_histogram,
         values_histogram=values_histogram,

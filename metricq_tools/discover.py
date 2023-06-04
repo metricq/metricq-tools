@@ -34,40 +34,44 @@ from asyncio import CancelledError, Queue
 from contextlib import asynccontextmanager
 from enum import Enum
 from enum import auto as enum_auto
-from typing import IO, Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
+from typing import (
+    IO,
+    Any,
+    AsyncGenerator,
+    AsyncIterator,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+)
 
 import aio_pika
 import async_timeout
 import click
-import click_completion
-import click_log
-import humanize
+import humanize  # type: ignore
 import metricq
 from dateutil.parser import isoparse as parse_iso_datetime
 from dateutil.tz import tzlocal
-from metricq.types import Timedelta
+from metricq import Timedelta
 
-from .logging import get_root_logger
+from .logging import logger
 from .utils import (
     ChoiceParam,
     CommandLineChoice,
     DurationParam,
     OutputFormat,
-    metricq_server_option,
+    metricq_command,
     output_format_option,
 )
-from .version import version as client_version
-
-logger = get_root_logger()
-
-click_completion.init()
 
 
 class IgnoredEvent(CommandLineChoice, Enum):
     ErrorResponses = enum_auto()
 
     @classmethod
-    def default(cls):
+    def default(cls) -> "IgnoredEvent":
         return cls.ErrorResponses
 
 
@@ -132,7 +136,7 @@ class DiscoverResponse:
         )
 
     @classmethod
-    def _parse_datetime(cls, iso_string) -> Optional[datetime.datetime]:
+    def _parse_datetime(cls, iso_string: Optional[str]) -> Optional[datetime.datetime]:
         if iso_string is None:
             return None
         else:
@@ -143,7 +147,7 @@ class DiscoverResponse:
                 logger.warning("Failed to parse ISO datestring ({}): {}", iso_string, e)
                 return None
 
-    def _fmt_parts(self):
+    def _fmt_parts(self) -> Iterable[str]:
         unknown_color = "bright_white"
 
         if self.error is not None:
@@ -177,7 +181,7 @@ class DiscoverResponse:
         if self.hostname:
             yield f"on {self.hostname}"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return " ".join(self._fmt_parts())
 
 
@@ -187,7 +191,7 @@ class Status(Enum):
     Error = enum_auto()
 
 
-def echo_status(status: Status, token: str, msg: str):
+def echo_status(status: Status, token: str, msg: str) -> None:
     style_status = {
         Status.Ok: {"text": "✔️", "fg": "green"},
         Status.Warning: {"text": "⚠", "fg": "yellow"},
@@ -200,17 +204,20 @@ def echo_status(status: Status, token: str, msg: str):
 
 
 class MetricQDiscover(metricq.Agent):
-    def __init__(self, server):
-        super().__init__("discover", server, add_uuid=True)
-        self._response_queue: Queue[Tuple[str, dict]] = Queue()
+    _response_queue: Queue[Tuple[str, dict[str, Any]]]
+
+    def __init__(self, token: str, server: str) -> None:
+        super().__init__(token=token, url=server, add_uuid=True)
+        self._response_queue = Queue()
 
     async def discover(
         self,
         timeout: Optional[Timedelta],
-    ) -> AsyncGenerator[Tuple[str, dict], None]:
+    ) -> AsyncGenerator[Tuple[str, dict[str, Any]], None]:
         await self.connect()
         await self.rpc_consume()
 
+        assert self._management_channel is not None
         self._management_broadcast_exchange = (
             await self._management_channel.declare_exchange(
                 name=self._management_broadcast_exchange_name,
@@ -229,13 +236,13 @@ class MetricQDiscover(metricq.Agent):
 
         return self.responses(timeout)
 
-    def on_discover(self, from_token, **response):
+    def on_discover(self, from_token: str, **response: Any) -> None:
         logger.debug("response: {}", response)
         self._response_queue.put_nowait((from_token, response))
 
     async def responses(
         self, timeout: Optional[Timedelta]
-    ) -> AsyncGenerator[Tuple[str, dict], None]:
+    ) -> AsyncGenerator[Tuple[str, dict[str, Any]], None]:
         timeout_sec = timeout.s if timeout is not None else None
         async with async_timeout.timeout(timeout_sec):
             while True:
@@ -246,10 +253,10 @@ class MetricQDiscover(metricq.Agent):
 
 
 def print_diff(
-    previous: Dict[str, dict],
-    current: Dict[str, dict],
+    previous: Dict[str, dict[str, Any]],
+    current: Dict[str, dict[str, Any]],
     format: OutputFormat,
-):
+) -> None:
     previous_clients = set(previous.keys())
     current_clients = set(current.keys())
 
@@ -273,7 +280,7 @@ def print_diff(
         )
     elif format is OutputFormat.Pretty:
 
-        def print_list(heading: str, clients: set[str], bullet="*"):
+        def print_list(heading: str, clients: set[str], bullet: str = "*") -> None:
             if clients:
                 click.echo(heading)
                 for client_token in sorted(clients):
@@ -292,7 +299,7 @@ def print_diff(
 
 
 @asynccontextmanager
-async def stopping(client: MetricQDiscover):
+async def stopping(client: MetricQDiscover) -> AsyncIterator[MetricQDiscover]:
     try:
         yield client
     finally:
@@ -300,13 +307,15 @@ async def stopping(client: MetricQDiscover):
 
 
 async def discover(
+    *,
+    token: str,
     server: str,
-    diff: Optional[IO],
+    diff: Optional[IO[str]],
     timeout: Optional[Timedelta],
     ignored_events: Set[IgnoredEvent],
     format: OutputFormat,
-):
-    async with stopping(MetricQDiscover(server)) as discoverer:
+) -> None:
+    async with stopping(MetricQDiscover(token=token, server=server)) as discoverer:
         responses = await discoverer.discover(timeout=timeout)
 
         if diff:
@@ -319,25 +328,22 @@ async def discover(
             return
 
         if format is OutputFormat.Json:
-
-            responses = {
+            responses_dict = {
                 from_token: response async for (from_token, response) in responses
             }
-            print(json.dumps(responses))
+            print(json.dumps(responses_dict))
 
         elif format is OutputFormat.Pretty:
             async for (from_token, response) in responses:
-                response = DiscoverResponse.parse(response)
-                if not response.error:
-                    status = Status.Ok if response.alive else Status.Warning
+                response_parsed = DiscoverResponse.parse(response)
+                if not response_parsed.error:
+                    status = Status.Ok if response_parsed.alive else Status.Warning
                     echo_status(status, from_token, str(response))
                 elif IgnoredEvent.ErrorResponses not in ignored_events:
                     echo_status(Status.Error, from_token, str(response))
 
 
-@click.command()
-@click.version_option(version=client_version)
-@metricq_server_option()
+@metricq_command(default_token="agent-tool-discover")
 @click.option(
     "-d",
     "--diff",
@@ -354,18 +360,19 @@ async def discover(
 )
 @output_format_option()
 @click.option("--ignore", type=IGNORED_EVENT, multiple=True, help="Messages to ignore.")
-@click_log.simple_verbosity_option(logger, default="warning")
 def main(
     server: str,
-    diff: Optional[IO],
+    token: str,
+    diff: Optional[IO[str]],
     timeout: Optional[Timedelta],
     format: OutputFormat,
     ignore: List[IgnoredEvent],
-):
+) -> None:
     """Send an RPC broadcast on the MetricQ network and wait for replies from online clients."""
 
     asyncio.run(
         discover(
+            token=token,
             server=server,
             diff=diff,
             timeout=timeout,

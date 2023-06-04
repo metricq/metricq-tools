@@ -30,27 +30,27 @@
 
 import asyncio
 from sys import exit
+from typing import Any, Optional
 
 import click
-import click_completion
-import click_log
 import metricq
 import numpy as np
-import termplotlib as tpl
+import termplotlib as tpl  # type: ignore
 from metricq import Subscriber
 from tabulate import tabulate
 
-from metricq_tools.utils import metricq_server_option, metricq_token_option
+from metricq_tools.utils import metricq_command
 
-from .logging import get_root_logger
+from .logging import logger
 from .version import version as client_version
-
-logger = get_root_logger()
-
-click_completion.init()
 
 
 class Summary:
+    timestamps: dict[str, list[float]]
+    last_timestamp: dict[str, Optional[float]]
+    intervals: dict[str, list[float]]
+    values: dict[str, list[float]]
+
     def __init__(
         self,
         metrics: list[str],
@@ -66,28 +66,30 @@ class Summary:
         self.print_stats = print_stats
         self.print_data = print_data
 
-        self.timestamps = dict[str, list]()
-        self.last_timestamp = dict[str]()
-        self.intervals = dict[str, list]()
-        self.values = dict[str, list]()
+        self.timestamps = {}
+        self.last_timestamp = {}
+        self.intervals = {}
+        self.values = {}
 
         for metric in metrics:
-            self.timestamps[metric] = list()
+            self.timestamps[metric] = []
             self.last_timestamp[metric] = None
-            self.intervals[metric] = list()
-            self.values[metric] = list()
+            self.intervals[metric] = []
+            self.values[metric] = []
 
-    async def add_data(self, metric: str, timestamp: metricq.Timestamp, value: float):
+    async def add_data(
+        self, metric: str, timestamp: metricq.Timestamp, value: float
+    ) -> None:
         if self.print_data:
             click.echo(click.style("{}: {}".format(timestamp, value), fg="bright_blue"))
 
         self.timestamps[metric].append(timestamp.posix)
-        if self.last_timestamp[metric]:
-            self.intervals[metric].append(timestamp.posix - self.last_timestamp[metric])
+        if (last_timestamp := self.last_timestamp[metric]) is not None:
+            self.intervals[metric].append(timestamp.posix - last_timestamp)
         self.last_timestamp[metric] = timestamp.posix
         self.values[metric].append(value)
 
-    def _print_histogram(self, values):
+    def _print_histogram(self, values: list[float]) -> None:
         counts, bin_edges = np.histogram(values, bins="doane")
         fig = tpl.figure()
         labels = [
@@ -102,7 +104,7 @@ class Summary:
         fig.barh(counts, labels=labels)
         fig.show()
 
-    def _print_intervals_histogram(self, intervals):
+    def _print_intervals_histogram(self, intervals: list[float]) -> None:
         click.echo(
             click.style(
                 "Distribution of the duration between consecutive data points in seconds",
@@ -116,7 +118,7 @@ class Summary:
         click.echo()
         click.echo()
 
-    def _print_values_histogram(self, values):
+    def _print_values_histogram(self, values: list[float]) -> None:
         click.echo(
             click.style("Distribution of the values of the data points", fg="yellow")
         )
@@ -127,9 +129,8 @@ class Summary:
         click.echo()
         click.echo()
 
-    def print(self):
+    def print(self) -> None:
         for metric in self._metrics:
-
             if self.values[metric]:
                 click.echo()
                 click.echo(click.style(f"Statistics of metric {metric!r}:", fg="green"))
@@ -150,7 +151,7 @@ class Summary:
         if self.print_stats:
             self._print_statistics()
 
-    def _print_statistics(self):
+    def _print_statistics(self) -> None:
         click.echo(
             click.style(
                 "Statistics",
@@ -158,8 +159,6 @@ class Summary:
             )
         )
         click.echo()
-
-        table = list[list]()
 
         headers = [
             "Metric",
@@ -172,6 +171,8 @@ class Summary:
             "Variance",
             "Count",
         ]
+
+        table: list[list[Any]] = [[] for _ in headers]
 
         for metric in self._metrics:
             if self.values[metric]:
@@ -201,7 +202,7 @@ class Summary:
         click.echo()
 
 
-async def run_cmd(command):
+async def run_cmd(command: str) -> Optional[int]:
     logger.debug("Running command: {!r}", command)
 
     proc = await asyncio.create_subprocess_shell(
@@ -224,15 +225,15 @@ async def run_cmd(command):
 
 
 async def async_main(
-    server,
-    token,
-    metric,
-    intervals_histogram,
-    values_histogram,
-    print_data_points,
-    print_statistics,
-    command,
-):
+    server: str,
+    token: str,
+    metric: list[str],
+    intervals_histogram: bool,
+    values_histogram: bool,
+    print_data_points: bool,
+    print_statistics: bool,
+    command: str,
+) -> Optional[int]:
     command_str = " ".join(command)
     summary = Summary(
         intervals_histogram=intervals_histogram,
@@ -243,25 +244,23 @@ async def async_main(
     )
     async with Subscriber(
         token=token,
-        management_url=server,
+        url=server,
         metrics=metric,
+        expires=3600,
+        client_version=client_version,
     ) as subscription:
-
         returncode = await run_cmd(command_str)
 
         async with subscription.drain() as drain:
-            async for metric, timestamp, value in drain:
-                await summary.add_data(metric, timestamp, value)
+            async for m, timestamp, value in drain:
+                await summary.add_data(m, timestamp, value)
 
         summary.print()
 
         return returncode
 
 
-@click.command()
-@click_log.simple_verbosity_option(logger, default="WARNING")
-@metricq_server_option()
-@metricq_token_option(default="metricq-summary")
+@metricq_command(default_token="sink-tool-summary")
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",
@@ -277,18 +276,17 @@ async def async_main(
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
 @click.option("--print-statistics/--no-print-statistics", "-s/-S", default=True)
 @click.option("-m", "--metric", required=True, multiple=True)
-@click.version_option(version=client_version)
 @click.argument("command", required=True, nargs=-1)
 def main(
-    server,
-    token,
-    metric,
-    intervals_histogram,
-    values_histogram,
-    print_data_points,
-    print_statistics,
-    command,
-):
+    server: str,
+    token: str,
+    metric: list[str],
+    intervals_histogram: bool,
+    values_histogram: bool,
+    print_data_points: bool,
+    print_statistics: bool,
+    command: str,
+) -> None:
     """Live metric data analysis and inspection on the MetricQ network.
 
     Consumes new data points for the given metric as they are submitted to the
