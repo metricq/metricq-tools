@@ -39,7 +39,7 @@ import termplotlib as tpl  # type: ignore
 from metricq import Subscriber
 from tabulate import tabulate
 
-from metricq_tools.utils import metricq_command
+from metricq_tools.utils import TemplateStringParam, metricq_command
 
 from .logging import logger
 from .version import version as client_version
@@ -275,7 +275,9 @@ async def async_main(
 )
 @click.option("--print-data-points/--no-print-data-points", "-d/-D", default=False)
 @click.option("--print-statistics/--no-print-statistics", "-s/-S", default=True)
-@click.option("-m", "--metric", required=True, multiple=True)
+@click.option(
+    "-m", "--metric", type=TemplateStringParam(), required=True, multiple=True
+)
 @click.argument("command", required=True, nargs=-1)
 def main(
     server: str,

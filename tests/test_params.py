@@ -1,3 +1,5 @@
+import getpass
+import socket
 from enum import Enum, auto
 from typing import Union
 
@@ -10,6 +12,7 @@ from metricq_tools.utils import (
     ChoiceParam,
     CommandLineChoice,
     DurationParam,
+    TemplateStringParam,
     TimestampParam,
 )
 
@@ -70,3 +73,20 @@ def test_duration_param() -> None:
     value = "30s"
     DURATION = DurationParam(default=None)
     assert DURATION.convert(value, param=None, ctx=None) == Timedelta.from_string(value)
+
+
+def test_template_string_param_user() -> None:
+    value = "foo-$USER-bar"
+    ref = f"foo-{getpass.getuser()}-bar"
+    assert TemplateStringParam()(value, param=None, ctx=None) == ref
+
+
+def test_template_string_param_host() -> None:
+    value = "foo-$HOST-bar"
+    ref = f"foo-{socket.gethostname()}-bar"
+    assert TemplateStringParam()(value, param=None, ctx=None) == ref
+
+
+def test_template_string_param_unknown() -> None:
+    value = "foo-$NOONEWILLEVERSETTHISVARIABLE"
+    assert TemplateStringParam()(value, param=None, ctx=None) == value

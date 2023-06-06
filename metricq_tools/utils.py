@@ -1,5 +1,9 @@
 import re
+from contextlib import suppress
 from enum import Enum, auto
+from getpass import getuser
+from socket import gethostname
+from string import Template
 from typing import Any, Callable, Generic, List, Optional, Type, TypeVar, Union, cast
 
 import click
@@ -161,9 +165,29 @@ class TimestampParam(ParamType):
 TIMESTAMP = TimestampParam()
 
 
+class TemplateStringParam(ParamType):
+    name = "text"
+    mapping: dict[str, str]
+
+    def __init__(self):
+        self.mapping = {}
+        with suppress(Exception):
+            self.mapping["USER"] = getuser()
+        with suppress(Exception):
+            self.mapping["HOST"] = gethostname()
+
+    def convert(
+        self, value: Any, param: Optional[Parameter], ctx: Optional[Context]
+    ) -> str:
+        if not isinstance(value, str):
+            raise TypeError("expected a string type for TemplateStringParam")
+        return Template(value).safe_substitute(self.mapping)
+
+
 def metricq_server_option() -> Callable[[FC], FC]:
     return option(
         "--server",
+        type=TemplateStringParam(),
         metavar="URL",
         default="amqp://localhost/",
         show_default=True,
@@ -174,6 +198,7 @@ def metricq_server_option() -> Callable[[FC], FC]:
 def metricq_token_option(default: str) -> Callable[[FC], FC]:
     return option(
         "--token",
+        type=TemplateStringParam(),
         metavar="CLIENT_TOKEN",
         default=default,
         show_default=True,
@@ -191,7 +216,10 @@ def metricq_command(default_token: str) -> Callable[[FC], click.Command]:
         "I.e., 'METRICQ_SERVER=amqps://...'.\n"
         "\n"
         "You can also create a '.metricq' file in the current or home directory that "
-        "contains environment variable settings in the same format."
+        "contains environment variable settings in the same format.\n"
+        "\n"
+        "Some options, including server and token, can contain placeholders for $USER "
+        "and $HOST."
     )
 
     def decorator(func: FC) -> click.Command:
