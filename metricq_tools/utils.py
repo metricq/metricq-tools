@@ -175,12 +175,21 @@ def metricq_command(default_token: str) -> Callable[[FC], click.Command]:
     log_decorator = cast(
         Callable[[FC], FC], click_log.simple_verbosity_option(logger, default="warning")
     )
+    context_settings = {"auto_envvar_prefix": "METRICQ"}
+    epilog = (
+        "All options can be passed as environment variables prefixed with 'METRICQ_'."
+        "I.e., 'METRICQ_SERVER=amqps://...'."
+    )
 
     def decorator(func: FC) -> click.Command:
         return click.version_option(version=client_version)(
             log_decorator(
                 metricq_token_option(default_token)(
-                    metricq_server_option()(click.command()(func))
+                    metricq_server_option()(
+                        click.command(context_settings=context_settings, epilog=epilog)(
+                            func
+                        )
+                    )
                 )
             )
         )
