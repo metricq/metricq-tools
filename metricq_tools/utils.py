@@ -5,12 +5,22 @@ from typing import Any, Callable, Generic, List, Optional, Type, TypeVar, Union,
 import click
 import click_log  # type: ignore
 from click import Context, Parameter, ParamType, option
+from dotenv import find_dotenv, load_dotenv
 from metricq import Timedelta, Timestamp
 
 from .logging import logger
 from .version import version as client_version
 
 _C = TypeVar("_C", covariant=True)
+
+# We do not interpolate (i.e. replace ${VAR} with corresponding environment variables).
+# That is because we want to be able to interpolate ourselves for metrics and tokens
+# using the same syntax. If it was only ${USER} for the token, we could use the
+# override functionality, but most unfortunately there is no standard environment
+# variable for the hostname. Even $HOST on zsh is not actually part of the environment.
+# ``override=false`` just means that environment variables have priority over the
+# env files.
+load_dotenv(dotenv_path=find_dotenv(".metricq"), interpolate=False, override=False)
 
 
 def camelcase_to_kebabcase(camelcase: str) -> str:
@@ -178,7 +188,10 @@ def metricq_command(default_token: str) -> Callable[[FC], click.Command]:
     context_settings = {"auto_envvar_prefix": "METRICQ"}
     epilog = (
         "All options can be passed as environment variables prefixed with 'METRICQ_'."
-        "I.e., 'METRICQ_SERVER=amqps://...'."
+        "I.e., 'METRICQ_SERVER=amqps://...'.\n"
+        "\n"
+        "You can also create a '.metricq' file in the current or home directory that "
+        "contains environment variable settings in the same format."
     )
 
     def decorator(func: FC) -> click.Command:
