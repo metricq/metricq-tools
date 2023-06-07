@@ -46,7 +46,7 @@ async def check_for_non_finite(client: metricq.HistoryClient) -> None:
         print(metric, aggregate)
 
 
-@metricq_command(default_token="history-tool-check")
+@metricq_command(default_token="history-$USER-tool-check")
 def main(server: str, token: str) -> None:
     """Check all historic metrics for non-finite values."""
     client = metricq.HistoryClient(

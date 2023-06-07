@@ -1,16 +1,30 @@
 import re
+from contextlib import suppress
 from enum import Enum, auto
+from getpass import getuser
+from socket import gethostname
+from string import Template
 from typing import Any, Callable, Generic, List, Optional, Type, TypeVar, Union, cast
 
 import click
 import click_log  # type: ignore
 from click import Context, Parameter, ParamType, option
+from dotenv import find_dotenv, load_dotenv
 from metricq import Timedelta, Timestamp
 
 from .logging import logger
 from .version import version as client_version
 
 _C = TypeVar("_C", covariant=True)
+
+# We do not interpolate (i.e. replace ${VAR} with corresponding environment variables).
+# That is because we want to be able to interpolate ourselves for metrics and tokens
+# using the same syntax. If it was only ${USER} for the token, we could use the
+# override functionality, but most unfortunately there is no standard environment
+# variable for the hostname. Even $HOST on zsh is not actually part of the environment.
+# ``override=false`` just means that environment variables have priority over the
+# env files.
+load_dotenv(dotenv_path=find_dotenv(".metricq"), interpolate=False, override=False)
 
 
 def camelcase_to_kebabcase(camelcase: str) -> str:
@@ -151,9 +165,29 @@ class TimestampParam(ParamType):
 TIMESTAMP = TimestampParam()
 
 
+class TemplateStringParam(ParamType):
+    name = "text"
+    mapping: dict[str, str]
+
+    def __init__(self):
+        self.mapping = {}
+        with suppress(Exception):
+            self.mapping["USER"] = getuser()
+        with suppress(Exception):
+            self.mapping["HOST"] = gethostname()
+
+    def convert(
+        self, value: Any, param: Optional[Parameter], ctx: Optional[Context]
+    ) -> str:
+        if not isinstance(value, str):
+            raise TypeError("expected a string type for TemplateStringParam")
+        return Template(value).safe_substitute(self.mapping)
+
+
 def metricq_server_option() -> Callable[[FC], FC]:
     return option(
         "--server",
+        type=TemplateStringParam(),
         metavar="URL",
         default="amqp://localhost/",
         show_default=True,
@@ -164,6 +198,7 @@ def metricq_server_option() -> Callable[[FC], FC]:
 def metricq_token_option(default: str) -> Callable[[FC], FC]:
     return option(
         "--token",
+        type=TemplateStringParam(),
         metavar="CLIENT_TOKEN",
         default=default,
         show_default=True,
@@ -175,12 +210,27 @@ def metricq_command(default_token: str) -> Callable[[FC], click.Command]:
     log_decorator = cast(
         Callable[[FC], FC], click_log.simple_verbosity_option(logger, default="warning")
     )
+    context_settings = {"auto_envvar_prefix": "METRICQ"}
+    epilog = (
+        "All options can be passed as environment variables prefixed with 'METRICQ_'."
+        "I.e., 'METRICQ_SERVER=amqps://...'.\n"
+        "\n"
+        "You can also create a '.metricq' file in the current or home directory that "
+        "contains environment variable settings in the same format.\n"
+        "\n"
+        "Some options, including server and token, can contain placeholders for $USER "
+        "and $HOST."
+    )
 
     def decorator(func: FC) -> click.Command:
         return click.version_option(version=client_version)(
             log_decorator(
                 metricq_token_option(default_token)(
-                    metricq_server_option()(click.command()(func))
+                    metricq_server_option()(
+                        click.command(context_settings=context_settings, epilog=epilog)(
+                            func
+                        )
+                    )
                 )
             )
         )
