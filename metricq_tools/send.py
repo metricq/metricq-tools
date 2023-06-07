@@ -31,8 +31,7 @@ from typing import Any
 import click
 from metricq import Metric, Source, Timestamp
 
-from metricq_tools.utils import TIMESTAMP, metricq_command
-
+from .utils import TIMESTAMP, metricq_command
 from .version import version as client_version
 
 

@@ -39,9 +39,8 @@ import termplotlib as tpl  # type: ignore
 from metricq import Subscriber
 from tabulate import tabulate
 
-from metricq_tools.utils import TemplateStringParam, metricq_command
-
 from .logging import logger
+from .utils import TemplateStringParam, metricq_command
 from .version import version as client_version
 
 

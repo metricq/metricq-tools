@@ -37,9 +37,8 @@ import numpy as np
 import termplotlib as tpl  # type: ignore
 from metricq.datachunk_pb2 import DataChunk
 
-from metricq_tools.utils import metricq_command
-
 from .logging import logger
+from .utils import metricq_command
 from .version import version as client_version
 
 
