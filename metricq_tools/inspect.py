@@ -184,7 +184,7 @@ class InspectSink(metricq.Sink):
             self.print_values_histogram()
 
 
-@metricq_command(default_token="agent-tool-inspect")
+@metricq_command(default_token="agent-$USER-tool-inspect")
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",

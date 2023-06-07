@@ -229,7 +229,7 @@ async def async_main(
         return returncode
 
 
-@metricq_command(default_token="sink-tool-summary")
+@metricq_command(default_token="sink-$USER-tool-summary")
 @click.option(
     "--intervals-histogram/--no-intervals-histogram",
     "-i/-I",

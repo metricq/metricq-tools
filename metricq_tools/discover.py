@@ -314,7 +314,7 @@ async def discover(
                     echo_status(Status.Error, from_token, str(response))
 
 
-@metricq_command(default_token="agent-tool-discover")
+@metricq_command(default_token="agent-$USER-tool-discover")
 @click.option(
     "-d",
     "--diff",

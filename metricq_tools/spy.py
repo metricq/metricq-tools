@@ -97,7 +97,7 @@ class MetricQSpy(metricq.HistoryClient):
         await super()._on_history_response(message)
 
 
-@metricq_command(default_token="agent-tool-spy")
+@metricq_command(default_token="agent-$USER-tool-spy")
 @output_format_option()
 @click.argument("metrics", required=True, nargs=-1)
 def main(server: str, token: str, format: OutputFormat, metrics: list[str]) -> None:

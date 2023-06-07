@@ -21,7 +21,7 @@ class MetricQSend(Source):
         await self.stop()
 
 
-@metricq_command(default_token="source-tool-send")
+@metricq_command(default_token="source-$USER-tool-send")
 @click.option(
     "--timestamp",
     type=TIMESTAMP,
