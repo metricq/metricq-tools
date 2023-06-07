@@ -69,6 +69,36 @@ def test_timestamp_param() -> None:
     )
 
 
+def test_timestamp_posix_param() -> None:
+    value = "1685782873.5"
+    assert TIMESTAMP.convert(
+        value, param=None, ctx=None
+    ) == Timestamp.from_posix_seconds(float(value))
+
+
+def test_timestamp_now_param() -> None:
+    value = "now"
+    now = Timestamp.now()
+    converted = TIMESTAMP.convert(value, param=None, ctx=None)
+    assert isinstance(converted, Timestamp)
+    assert converted - now < Timedelta.from_s(1)
+
+
+def test_timestamp_epoch_param() -> None:
+    value = "epoch"
+    assert TIMESTAMP.convert(
+        value, param=None, ctx=None
+    ) == Timestamp.from_posix_seconds(0)
+
+
+def test_timestamp_past_param() -> None:
+    value = "-1h"
+    ref = Timestamp.now() - Timedelta.from_s(3600)
+    converted = TIMESTAMP.convert(value, param=None, ctx=None)
+    assert isinstance(converted, Timestamp)
+    assert converted - ref < Timedelta.from_s(1)
+
+
 def test_duration_param() -> None:
     value = "30s"
     DURATION = DurationParam(default=None)

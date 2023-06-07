@@ -142,24 +142,52 @@ class DurationParam(ParamType):
 
 
 class TimestampParam(ParamType):
+    """
+    Convert strings to ``metricq.Timestamp`` objects.
+
+    Accepts the following string inputs
+    - ISO-8601 timestamp (with timezone)
+    - Past Duration, e.g., '-10h' from now
+    - Posix timestamp, float seconds since 1.1.1970 midnight. (UTC)
+    - 'now'
+    - 'epoch', i.e., 1.1.1970 midnight
+    """
+
     name = "timestamp"
 
+    @staticmethod
+    def _convert(value: str) -> Timestamp:
+        if value == "now":
+            return Timestamp.now()
+        if value == "epoch":
+            return Timestamp.from_posix_seconds(0)
+        if value.startswith("-"):
+            # Plus because the minus makes negative timedelta
+            return Timestamp.now() + Timedelta.from_string(value)
+        with suppress(ValueError):
+            return Timestamp.from_posix_seconds(float(value))
+
+        return Timestamp.from_iso8601(value)
+
     def convert(
-        self, value: str, param: Optional[Parameter], ctx: Optional[Context]
-    ) -> Any:
+        self, value: Any, param: Optional[Parameter], ctx: Optional[Context]
+    ) -> Optional[Timestamp]:
         if value is None:
             return None
+        elif isinstance(value, Timestamp):
+            return value
         elif isinstance(value, str):
             try:
-                return Timestamp.from_iso8601(value)
+                return self._convert(value)
             except ValueError:
                 self.fail(
-                    "expected an ISO-8601 timestamp (e.g. 2012-12-21T00:00:00Z)",
+                    "expected an ISO-8601 timestamp (e.g. '2012-12-21T00:00:00Z'), "
+                    "POSIX timestamp, 'now', 'epoch', or a past duration (e.g. '-10h')",
                     param=param,
                     ctx=ctx,
                 )
         else:
-            return value
+            self.fail("unexpected type to convert to TimeStamp", param=param, ctx=ctx)
 
 
 TIMESTAMP = TimestampParam()
