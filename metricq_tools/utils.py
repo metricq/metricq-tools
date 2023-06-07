@@ -1,3 +1,4 @@
+import asyncio
 import re
 from contextlib import suppress
 from enum import Enum, auto
@@ -264,3 +265,25 @@ def metricq_command(default_token: str) -> Callable[[FC], click.Command]:
         )
 
     return decorator
+
+
+async def run_cmd(command: list[str]) -> Optional[int]:
+    logger.debug("Running command: {!r}", command)
+
+    proc = await asyncio.create_subprocess_exec(
+        *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+
+    stdout, stderr = await proc.communicate()
+
+    if stdout:
+        click.echo(stdout.decode())
+    if stderr:
+        click.echo(click.style(stderr.decode(), fg="red"))
+
+    if proc.returncode == 0:
+        logger.info("{!r} exited with {}", command, proc.returncode)
+    else:
+        logger.error("{!r} exited with {}", command, proc.returncode)
+
+    return proc.returncode
