@@ -198,7 +198,7 @@ class TemplateStringParam(ParamType):
     name = "text"
     mapping: dict[str, str]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.mapping = {}
         with suppress(Exception):
             self.mapping["USER"] = getuser()
