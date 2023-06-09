@@ -22,8 +22,8 @@ Common command line options
   --help                Show this message and exit.
 ```
 
-All options for these tools can be passed as environment variables prefixed with `METRICQ_`.
-I.e., `METRICQ_SERVER=amqps://...`.
+All options for these tools can be passed as environment variables prefixed with `METRICQ_`,
+i.e., `METRICQ_SERVER=amqps://...`.
 You can also create a `.metricq` file in the current or home directory that contains environment variable settings in the same format.
 Some options, including server and token, can contain placeholders for `$USER` and `$HOST`.
 
