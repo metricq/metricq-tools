@@ -105,7 +105,3 @@ def main(server: str, token: str, format: OutputFormat, metrics: list[str]) -> N
     spy = MetricQSpy(token=token, url=server)
 
     asyncio.run(spy.spy(metrics, output_format=format))
-
-
-if __name__ == "__main__":
-    main()

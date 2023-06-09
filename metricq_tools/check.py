@@ -57,7 +57,3 @@ def main(server: str, token: str) -> None:
     )
 
     asyncio.run(check_for_non_finite(client))
-
-
-if __name__ == "__main__":
-    main()
