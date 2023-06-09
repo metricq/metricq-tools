@@ -218,8 +218,7 @@ def metricq_server_option() -> Callable[[FC], FC]:
         "--server",
         type=TemplateStringParam(),
         metavar="URL",
-        default="amqp://localhost/",
-        show_default=True,
+        required=True,
         help="MetricQ server URL.",
     )
 

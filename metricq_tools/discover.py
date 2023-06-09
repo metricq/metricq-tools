@@ -351,7 +351,3 @@ def main(
             ignored_events=set(event for event in ignore),
         )
     )
-
-
-if __name__ == "__main__":
-    main()

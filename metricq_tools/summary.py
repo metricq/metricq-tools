@@ -254,7 +254,3 @@ def main(
     )
 
     exit(returncode)
-
-
-if __name__ == "__main__":
-    main()

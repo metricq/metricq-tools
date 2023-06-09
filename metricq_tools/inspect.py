@@ -229,7 +229,3 @@ def main(
         print_data=print_data_points,
     )
     sink.run()
-
-
-if __name__ == "__main__":
-    main()
