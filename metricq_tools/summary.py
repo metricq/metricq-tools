@@ -9,8 +9,7 @@ import termplotlib as tpl  # type: ignore
 from metricq import Subscriber
 from tabulate import tabulate
 
-from .logging import logger
-from .utils import TemplateStringParam, metricq_command
+from .utils import TemplateStringParam, metricq_command, run_cmd
 from .version import version as client_version
 
 
@@ -171,28 +170,6 @@ class Summary:
         click.echo()
 
 
-async def run_cmd(command: str) -> Optional[int]:
-    logger.debug("Running command: {!r}", command)
-
-    proc = await asyncio.create_subprocess_shell(
-        command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-    )
-
-    stdout, stderr = await proc.communicate()
-
-    if stdout:
-        click.echo(stdout.decode())
-    if stderr:
-        click.echo(click.style(stderr.decode(), fg="red"))
-
-    if proc.returncode == 0:
-        logger.info("{!r} exited with {}", command, proc.returncode)
-    else:
-        logger.error("{!r} exited with {}", command, proc.returncode)
-
-    return proc.returncode
-
-
 async def async_main(
     server: str,
     token: str,
@@ -201,9 +178,8 @@ async def async_main(
     values_histogram: bool,
     print_data_points: bool,
     print_statistics: bool,
-    command: str,
+    command: list[str],
 ) -> Optional[int]:
-    command_str = " ".join(command)
     summary = Summary(
         intervals_histogram=intervals_histogram,
         values_histogram=values_histogram,
@@ -218,7 +194,7 @@ async def async_main(
         expires=3600,
         client_version=client_version,
     ) as subscription:
-        returncode = await run_cmd(command_str)
+        returncode = await run_cmd(command)
 
         async with subscription.drain() as drain:
             async for m, timestamp, value in drain:
@@ -256,7 +232,7 @@ def main(
     values_histogram: bool,
     print_data_points: bool,
     print_statistics: bool,
-    command: str,
+    command: list[str],
 ) -> None:
     """Live metric data analysis and inspection on the MetricQ network.
 
